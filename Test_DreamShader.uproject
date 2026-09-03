@@ -25,6 +25,10 @@
 		{
 			"Name": "UE_MCP_Bridge",
 			"Enabled": true
+		},
+		{
+			"Name": "Vapor",
+			"Enabled": true
 		}
 	]
 }
