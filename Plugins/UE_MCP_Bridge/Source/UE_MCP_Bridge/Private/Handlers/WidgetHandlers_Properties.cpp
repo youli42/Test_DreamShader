@@ -1,0 +1,1295 @@
+// Split from WidgetHandlers.cpp to keep that file under 3k lines.
+// All functions below are still members of FWidgetHandlers - this file is a
+// translation-unit partition, not a new class. Handler registration
+// stays in WidgetHandlers.cpp::RegisterHandlers.
+
+#include "WidgetHandlers.h"
+#include "HandlerRegistry.h"
+#include "HandlerUtils.h"
+#include "HandlerJsonProperty.h"
+#include "WidgetBlueprint.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/Widget.h"
+#include "Components/PanelWidget.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/VerticalBoxSlot.h"
+#include "Components/TextBlock.h"
+#include "Components/Image.h"
+#include "Components/Button.h"
+#include "Components/ProgressBar.h"
+#include "Components/CheckBox.h"
+#include "Components/Slider.h"
+#include "Components/EditableTextBox.h"
+#include "Components/ComboBoxString.h"
+#include "Components/CanvasPanel.h"
+#include "Components/HorizontalBox.h"
+#include "Components/VerticalBox.h"
+#include "Components/Overlay.h"
+#include "Components/GridPanel.h"
+#include "Components/UniformGridPanel.h"
+#include "Components/WidgetSwitcher.h"
+#include "Components/ScrollBox.h"
+#include "Components/SizeBox.h"
+#include "Components/ScaleBox.h"
+#include "Components/Border.h"
+#include "Components/Spacer.h"
+#include "Components/RichTextBlock.h"
+#include "Components/OverlaySlot.h"
+#include "Animation/WidgetAnimation.h"
+#include "MovieScene.h"
+#include "MovieScenePossessable.h"
+#include "MovieSceneSpawnable.h"
+#include "Engine/Texture2D.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/UnrealType.h"
+#include "UObject/UObjectGlobals.h"
+#include "UObject/Package.h"
+#include "EditorAssetLibrary.h"
+#include "Kismet2/BlueprintEditorUtils.h"
+#include "Kismet2/KismetEditorUtilities.h"
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
+
+
+TSharedPtr<FJsonValue> FWidgetHandlers::GetWidgetProperties(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+
+	FString WidgetName;
+	if (auto Err = RequireString(Params, TEXT("widgetName"), WidgetName)) return Err;
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+
+	if (!WidgetBP->WidgetTree) return MCPWidget::MissingWidgetTreeError(AssetPath);
+
+	// Find the widget
+	UWidget* FoundWidget = nullptr;
+	WidgetBP->WidgetTree->ForEachWidget([&](UWidget* Widget)
+	{
+		if (Widget && Widget->GetName() == WidgetName)
+		{
+			FoundWidget = Widget;
+		}
+	});
+
+	if (!FoundWidget)
+	{
+		return MCPError(FString::Printf(TEXT("Widget not found: '%s'"), *WidgetName));
+	}
+
+	TSharedPtr<FJsonObject> PropsObj = MakeShared<FJsonObject>();
+	PropsObj->SetStringField(TEXT("name"), FoundWidget->GetName());
+	PropsObj->SetStringField(TEXT("class"), FoundWidget->GetClass()->GetName());
+	PropsObj->SetBoolField(TEXT("isVisible"), FoundWidget->IsVisible());
+
+	// Type-specific properties
+	if (UTextBlock* TextBlock = Cast<UTextBlock>(FoundWidget))
+	{
+		PropsObj->SetStringField(TEXT("text"), TextBlock->GetText().ToString());
+		PropsObj->SetStringField(TEXT("widgetType"), TEXT("TextBlock"));
+
+		// Font info
+		FSlateFontInfo FontInfo = TextBlock->GetFont();
+		PropsObj->SetStringField(TEXT("fontFamily"), FontInfo.FontObject ? FontInfo.FontObject->GetName() : TEXT(""));
+		PropsObj->SetNumberField(TEXT("fontSize"), FontInfo.Size);
+
+		// Color
+		FLinearColor Color = TextBlock->GetColorAndOpacity().GetSpecifiedColor();
+		TSharedPtr<FJsonObject> ColorObj = MakeShared<FJsonObject>();
+		ColorObj->SetNumberField(TEXT("r"), Color.R);
+		ColorObj->SetNumberField(TEXT("g"), Color.G);
+		ColorObj->SetNumberField(TEXT("b"), Color.B);
+		ColorObj->SetNumberField(TEXT("a"), Color.A);
+		PropsObj->SetObjectField(TEXT("color"), ColorObj);
+	}
+	else if (UImage* Image = Cast<UImage>(FoundWidget))
+	{
+		PropsObj->SetStringField(TEXT("widgetType"), TEXT("Image"));
+
+		// Brush info
+		const FSlateBrush& Brush = Image->GetBrush();
+		TSharedPtr<FJsonObject> BrushObj = MakeShared<FJsonObject>();
+		BrushObj->SetStringField(TEXT("resourceName"), Brush.GetResourceName().ToString());
+		BrushObj->SetNumberField(TEXT("imageSizeX"), Brush.ImageSize.X);
+		BrushObj->SetNumberField(TEXT("imageSizeY"), Brush.ImageSize.Y);
+		BrushObj->SetStringField(TEXT("drawAs"), StaticEnum<ESlateBrushDrawType::Type>()->GetNameStringByValue((int64)Brush.DrawAs));
+		BrushObj->SetStringField(TEXT("tiling"), StaticEnum<ESlateBrushTileType::Type>()->GetNameStringByValue((int64)Brush.Tiling));
+		PropsObj->SetObjectField(TEXT("brush"), BrushObj);
+
+		// Color tint
+		FLinearColor Tint = Image->GetColorAndOpacity();
+		TSharedPtr<FJsonObject> TintObj = MakeShared<FJsonObject>();
+		TintObj->SetNumberField(TEXT("r"), Tint.R);
+		TintObj->SetNumberField(TEXT("g"), Tint.G);
+		TintObj->SetNumberField(TEXT("b"), Tint.B);
+		TintObj->SetNumberField(TEXT("a"), Tint.A);
+		PropsObj->SetObjectField(TEXT("colorAndOpacity"), TintObj);
+	}
+	else if (UButton* Button = Cast<UButton>(FoundWidget))
+	{
+		PropsObj->SetStringField(TEXT("widgetType"), TEXT("Button"));
+
+		// Button style
+		const FButtonStyle& Style = Button->GetStyle();
+		TSharedPtr<FJsonObject> StyleObj = MakeShared<FJsonObject>();
+
+		// Normal brush
+		StyleObj->SetStringField(TEXT("normalResourceName"), Style.Normal.GetResourceName().ToString());
+		StyleObj->SetStringField(TEXT("hoveredResourceName"), Style.Hovered.GetResourceName().ToString());
+		StyleObj->SetStringField(TEXT("pressedResourceName"), Style.Pressed.GetResourceName().ToString());
+
+		PropsObj->SetObjectField(TEXT("style"), StyleObj);
+
+		// Color
+		FLinearColor BtnColor = Button->GetColorAndOpacity();
+		TSharedPtr<FJsonObject> BtnColorObj = MakeShared<FJsonObject>();
+		BtnColorObj->SetNumberField(TEXT("r"), BtnColor.R);
+		BtnColorObj->SetNumberField(TEXT("g"), BtnColor.G);
+		BtnColorObj->SetNumberField(TEXT("b"), BtnColor.B);
+		BtnColorObj->SetNumberField(TEXT("a"), BtnColor.A);
+		PropsObj->SetObjectField(TEXT("colorAndOpacity"), BtnColorObj);
+	}
+	else if (UProgressBar* ProgressBar = Cast<UProgressBar>(FoundWidget))
+	{
+		PropsObj->SetStringField(TEXT("widgetType"), TEXT("ProgressBar"));
+		PropsObj->SetNumberField(TEXT("percent"), ProgressBar->GetPercent());
+
+		// Fill color
+		FLinearColor FillColor = ProgressBar->GetFillColorAndOpacity();
+		TSharedPtr<FJsonObject> FillObj = MakeShared<FJsonObject>();
+		FillObj->SetNumberField(TEXT("r"), FillColor.R);
+		FillObj->SetNumberField(TEXT("g"), FillColor.G);
+		FillObj->SetNumberField(TEXT("b"), FillColor.B);
+		FillObj->SetNumberField(TEXT("a"), FillColor.A);
+		PropsObj->SetObjectField(TEXT("fillColor"), FillObj);
+	}
+	else if (UCheckBox* CheckBox = Cast<UCheckBox>(FoundWidget))
+	{
+		PropsObj->SetStringField(TEXT("widgetType"), TEXT("CheckBox"));
+		PropsObj->SetBoolField(TEXT("isChecked"), CheckBox->IsChecked());
+	}
+	else if (USlider* Slider = Cast<USlider>(FoundWidget))
+	{
+		PropsObj->SetStringField(TEXT("widgetType"), TEXT("Slider"));
+		PropsObj->SetNumberField(TEXT("value"), Slider->GetValue());
+		PropsObj->SetNumberField(TEXT("minValue"), Slider->GetMinValue());
+		PropsObj->SetNumberField(TEXT("maxValue"), Slider->GetMaxValue());
+	}
+	else if (UEditableTextBox* EditableText = Cast<UEditableTextBox>(FoundWidget))
+	{
+		PropsObj->SetStringField(TEXT("widgetType"), TEXT("EditableTextBox"));
+		PropsObj->SetStringField(TEXT("text"), EditableText->GetText().ToString());
+		PropsObj->SetStringField(TEXT("hintText"), EditableText->GetHintText().ToString());
+	}
+	else if (UComboBoxString* ComboBox = Cast<UComboBoxString>(FoundWidget))
+	{
+		PropsObj->SetStringField(TEXT("widgetType"), TEXT("ComboBoxString"));
+		PropsObj->SetStringField(TEXT("selectedOption"), ComboBox->GetSelectedOption());
+		PropsObj->SetNumberField(TEXT("optionCount"), ComboBox->GetOptionCount());
+
+		TArray<TSharedPtr<FJsonValue>> OptionsArray;
+		for (int32 i = 0; i < ComboBox->GetOptionCount(); ++i)
+		{
+			OptionsArray.Add(MakeShared<FJsonValueString>(ComboBox->GetOptionAtIndex(i)));
+		}
+		PropsObj->SetArrayField(TEXT("options"), OptionsArray);
+	}
+	else
+	{
+		PropsObj->SetStringField(TEXT("widgetType"), FoundWidget->GetClass()->GetName());
+	}
+
+	// Common slot info via reflection
+	UPanelWidget* ParentWidget = FoundWidget->GetParent();
+	if (ParentWidget)
+	{
+		PropsObj->SetStringField(TEXT("parentName"), ParentWidget->GetName());
+		PropsObj->SetStringField(TEXT("parentClass"), ParentWidget->GetClass()->GetName());
+	}
+
+	// #107: dump Slot layout properties (anchors, position, padding, alignment, etc.) via reflection
+	if (UPanelSlot* Slot = FoundWidget->Slot)
+	{
+		TSharedPtr<FJsonObject> SlotObj = MakeShared<FJsonObject>();
+		SlotObj->SetStringField(TEXT("class"), Slot->GetClass()->GetName());
+
+		TSharedPtr<FJsonObject> SlotProps = MakeShared<FJsonObject>();
+		for (TFieldIterator<FProperty> It(Slot->GetClass()); It; ++It)
+		{
+			FProperty* Prop = *It;
+			if (!Prop) continue;
+			// Skip CPF_Edit check - include all reflected slot properties
+			FString ValueStr;
+			const void* ValuePtr = Prop->ContainerPtrToValuePtr<void>(Slot);
+			Prop->ExportText_Direct(ValueStr, ValuePtr, ValuePtr, Slot, PPF_None);
+			if (!ValueStr.IsEmpty())
+			{
+				SlotProps->SetStringField(Prop->GetName(), ValueStr);
+			}
+		}
+		SlotObj->SetObjectField(TEXT("properties"), SlotProps);
+		PropsObj->SetObjectField(TEXT("slot"), SlotObj);
+	}
+
+	auto Result = MCPSuccess();
+	Result->SetObjectField(TEXT("properties"), PropsObj);
+
+	return MCPResult(Result);
+}
+
+
+// get_widget_properties -- full reflected property dump for a named widget,
+// unlike get_widget_details which returns only a curated subset. Returns every
+// UPROPERTY (RenderOpacity, Visibility, ColorAndOpacity, Border padding/colors,
+// Image brush fields, fonts, etc.) plus the slot block, so visual bugs can be
+// diagnosed without execute_python reflection. Optional includeSubtree walks
+// children. (#547)
+TSharedPtr<FJsonValue> FWidgetHandlers::GetWidgetFullProperties(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+
+	FString WidgetName;
+	if (auto Err = RequireString(Params, TEXT("widgetName"), WidgetName)) return Err;
+
+	const bool bIncludeSubtree = OptionalBool(Params, TEXT("includeSubtree"), false);
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+	if (!WidgetBP->WidgetTree) return MCPWidget::MissingWidgetTreeError(AssetPath);
+
+	UWidget* FoundWidget = nullptr;
+	WidgetBP->WidgetTree->ForEachWidget([&](UWidget* Widget)
+	{
+		if (Widget && Widget->GetName() == WidgetName) FoundWidget = Widget;
+	});
+	if (!FoundWidget)
+	{
+		return MCPError(FString::Printf(TEXT("Widget not found: '%s'"), *WidgetName));
+	}
+
+	// Reflect every UPROPERTY on a widget (and its slot) into a JSON object.
+	auto DumpWidget = [](UWidget* W) -> TSharedPtr<FJsonObject>
+	{
+		TSharedPtr<FJsonObject> Obj = MakeShared<FJsonObject>();
+		Obj->SetStringField(TEXT("name"), W->GetName());
+		Obj->SetStringField(TEXT("class"), W->GetClass()->GetName());
+
+		TSharedPtr<FJsonObject> Props = MakeShared<FJsonObject>();
+		for (TFieldIterator<FProperty> It(W->GetClass()); It; ++It)
+		{
+			FProperty* Prop = *It;
+			FString ValueStr;
+			const void* ValuePtr = Prop->ContainerPtrToValuePtr<void>(W);
+			Prop->ExportText_Direct(ValueStr, ValuePtr, ValuePtr, W, PPF_None);
+			Props->SetStringField(Prop->GetName(), ValueStr);
+		}
+		Obj->SetObjectField(TEXT("properties"), Props);
+
+		if (UPanelSlot* Slot = W->Slot)
+		{
+			TSharedPtr<FJsonObject> SlotObj = MakeShared<FJsonObject>();
+			SlotObj->SetStringField(TEXT("class"), Slot->GetClass()->GetName());
+			TSharedPtr<FJsonObject> SlotProps = MakeShared<FJsonObject>();
+			for (TFieldIterator<FProperty> It(Slot->GetClass()); It; ++It)
+			{
+				FProperty* Prop = *It;
+				FString ValueStr;
+				const void* ValuePtr = Prop->ContainerPtrToValuePtr<void>(Slot);
+				Prop->ExportText_Direct(ValueStr, ValuePtr, ValuePtr, Slot, PPF_None);
+				SlotProps->SetStringField(Prop->GetName(), ValueStr);
+			}
+			SlotObj->SetObjectField(TEXT("properties"), SlotProps);
+			Obj->SetObjectField(TEXT("slot"), SlotObj);
+		}
+		return Obj;
+	};
+
+	auto Result = MCPSuccess();
+	Result->SetStringField(TEXT("assetPath"), AssetPath);
+	Result->SetObjectField(TEXT("widget"), DumpWidget(FoundWidget));
+
+	if (bIncludeSubtree)
+	{
+		TArray<TSharedPtr<FJsonValue>> Children;
+		if (UPanelWidget* Panel = Cast<UPanelWidget>(FoundWidget))
+		{
+			TArray<UWidget*> Stack;
+			for (int32 i = 0; i < Panel->GetChildrenCount(); ++i)
+			{
+				if (UWidget* C = Panel->GetChildAt(i)) Stack.Add(C);
+			}
+			while (Stack.Num() > 0)
+			{
+				UWidget* W = Stack.Pop();
+				Children.Add(MakeShared<FJsonValueObject>(DumpWidget(W)));
+				if (UPanelWidget* CP = Cast<UPanelWidget>(W))
+				{
+					for (int32 i = 0; i < CP->GetChildrenCount(); ++i)
+					{
+						if (UWidget* GC = CP->GetChildAt(i)) Stack.Add(GC);
+					}
+				}
+			}
+		}
+		Result->SetArrayField(TEXT("subtree"), Children);
+	}
+
+	return MCPResult(Result);
+}
+
+// list_widget_bindings -- enumerate the designer property bindings stored on a
+// WidgetBlueprint (UWidgetBlueprint::Bindings), which the UE 5.7 Python API
+// keeps protected. Returns {widgetName, propertyName, functionName,
+// bindingType}. Optional filterWidgetName / filterProperty narrow the list.
+// (#530)
+TSharedPtr<FJsonValue> FWidgetHandlers::ListWidgetBindings(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+
+	const FString FilterWidget = OptionalString(Params, TEXT("filterWidgetName"));
+	const FString FilterProperty = OptionalString(Params, TEXT("filterProperty"));
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+
+	TArray<TSharedPtr<FJsonValue>> BindingsArr;
+	for (const FDelegateEditorBinding& B : WidgetBP->Bindings)
+	{
+		const FString WidgetObj = B.ObjectName;
+		const FString PropName = B.PropertyName.ToString();
+		if (!FilterWidget.IsEmpty() && !WidgetObj.Equals(FilterWidget, ESearchCase::IgnoreCase)) continue;
+		if (!FilterProperty.IsEmpty() && !PropName.Equals(FilterProperty, ESearchCase::IgnoreCase)) continue;
+
+		TSharedPtr<FJsonObject> Obj = MakeShared<FJsonObject>();
+		Obj->SetStringField(TEXT("widgetName"), WidgetObj);
+		Obj->SetStringField(TEXT("propertyName"), PropName);
+		Obj->SetStringField(TEXT("functionName"), B.FunctionName.ToString());
+		Obj->SetStringField(TEXT("bindingType"), B.Kind == EBindingKind::Function ? TEXT("Function") : TEXT("Property"));
+		BindingsArr.Add(MakeShared<FJsonValueObject>(Obj));
+	}
+
+	auto Result = MCPSuccess();
+	Result->SetStringField(TEXT("assetPath"), AssetPath);
+	Result->SetNumberField(TEXT("bindingCount"), BindingsArr.Num());
+	Result->SetArrayField(TEXT("bindings"), BindingsArr);
+	return MCPResult(Result);
+}
+
+// clear_widget_binding -- remove designer binding(s) matching widgetName (and
+// optional propertyName) from a WidgetBlueprint, without opening the editor.
+// Idempotent: removing a non-existent binding reports removed=0. (#530)
+TSharedPtr<FJsonValue> FWidgetHandlers::ClearWidgetBinding(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+
+	FString WidgetName;
+	if (auto Err = RequireString(Params, TEXT("widgetName"), WidgetName)) return Err;
+
+	const FString PropertyName = OptionalString(Params, TEXT("propertyName"));
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+
+	WidgetBP->Modify();
+	const int32 Removed = WidgetBP->Bindings.RemoveAll([&](const FDelegateEditorBinding& B)
+	{
+		if (!FString(B.ObjectName).Equals(WidgetName, ESearchCase::IgnoreCase)) return false;
+		if (!PropertyName.IsEmpty() && !B.PropertyName.ToString().Equals(PropertyName, ESearchCase::IgnoreCase)) return false;
+		return true;
+	});
+
+	auto Result = MCPSuccess();
+	Result->SetStringField(TEXT("assetPath"), AssetPath);
+	Result->SetStringField(TEXT("widgetName"), WidgetName);
+	Result->SetNumberField(TEXT("removed"), Removed);
+	if (Removed == 0)
+	{
+		MCPSetExisted(Result);
+		return MCPResult(Result);
+	}
+
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBP);
+	FKismetEditorUtilities::CompileBlueprint(WidgetBP);
+	UEditorAssetLibrary::SaveAsset(AssetPath);
+	MCPSetUpdated(Result);
+	return MCPResult(Result);
+}
+
+TSharedPtr<FJsonValue> FWidgetHandlers::SetWidgetProperty(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+
+	FString WidgetName;
+	if (auto Err = RequireString(Params, TEXT("widgetName"), WidgetName)) return Err;
+
+	FString PropertyName;
+	if (auto Err = RequireString(Params, TEXT("propertyName"), PropertyName)) return Err;
+
+	FString PropertyValue;
+	if (auto Err = RequireStringAlt(Params, TEXT("propertyValue"), TEXT("value"), PropertyValue)) return Err;
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+
+	if (!WidgetBP->WidgetTree) return MCPWidget::MissingWidgetTreeError(AssetPath);
+
+	// Find the widget
+	UWidget* FoundWidget = nullptr;
+	WidgetBP->WidgetTree->ForEachWidget([&](UWidget* Widget)
+	{
+		if (Widget && Widget->GetName() == WidgetName)
+		{
+			FoundWidget = Widget;
+		}
+	});
+
+	if (!FoundWidget)
+	{
+		return MCPError(FString::Printf(TEXT("Widget not found: '%s'"), *WidgetName));
+	}
+
+	bool bPropertySet = false;
+
+	// Handle well-known properties by type
+	if (UTextBlock* TextBlock = Cast<UTextBlock>(FoundWidget))
+	{
+		if (PropertyName == TEXT("text") || PropertyName == TEXT("Text"))
+		{
+			TextBlock->SetText(FText::FromString(PropertyValue));
+			bPropertySet = true;
+		}
+		else if (PropertyName == TEXT("fontSize"))
+		{
+			FSlateFontInfo FontInfo = TextBlock->GetFont();
+			FontInfo.Size = FCString::Atoi(*PropertyValue);
+			TextBlock->SetFont(FontInfo);
+			bPropertySet = true;
+		}
+	}
+	else if (UImage* Image = Cast<UImage>(FoundWidget))
+	{
+		if (PropertyName == TEXT("colorAndOpacity") || PropertyName == TEXT("tint"))
+		{
+			// Expect "R,G,B,A" format
+			TArray<FString> Components;
+			PropertyValue.ParseIntoArray(Components, TEXT(","));
+			if (Components.Num() >= 3)
+			{
+				float R = FCString::Atof(*Components[0]);
+				float G = FCString::Atof(*Components[1]);
+				float B = FCString::Atof(*Components[2]);
+				float A = Components.Num() >= 4 ? FCString::Atof(*Components[3]) : 1.0f;
+				Image->SetColorAndOpacity(FLinearColor(R, G, B, A));
+				bPropertySet = true;
+			}
+		}
+		// (#159, #364) Brush fields - ImageSize, Tint, DrawAs, Tiling, Margin, ResourceObject.
+		// Case-insensitive so "Brush.ImageSize" works as well as "brush.imageSize".
+		else if (PropertyName.StartsWith(TEXT("brush."), ESearchCase::IgnoreCase))
+		{
+			FString Field = PropertyName.Mid(6); // strip "brush."
+			FSlateBrush Brush = Image->GetBrush();
+			if (Field == TEXT("imageSize") || Field == TEXT("ImageSize"))
+			{
+				TArray<FString> Parts;
+				PropertyValue.ParseIntoArray(Parts, TEXT(","));
+				if (Parts.Num() >= 2)
+				{
+					Brush.ImageSize = FVector2D(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]));
+					Image->SetBrush(Brush);
+					bPropertySet = true;
+				}
+			}
+			else if (Field == TEXT("tint") || Field == TEXT("Tint") || Field == TEXT("tintColor"))
+			{
+				TArray<FString> Parts;
+				PropertyValue.ParseIntoArray(Parts, TEXT(","));
+				if (Parts.Num() >= 3)
+				{
+					float R = FCString::Atof(*Parts[0]);
+					float G = FCString::Atof(*Parts[1]);
+					float B = FCString::Atof(*Parts[2]);
+					float A = Parts.Num() >= 4 ? FCString::Atof(*Parts[3]) : 1.0f;
+					Brush.TintColor = FSlateColor(FLinearColor(R, G, B, A));
+					Image->SetBrush(Brush);
+					bPropertySet = true;
+				}
+			}
+			else if (Field == TEXT("drawAs") || Field == TEXT("DrawAs"))
+			{
+				const FString V = PropertyValue.ToLower();
+				if (V == TEXT("image"))         { Brush.DrawAs = ESlateBrushDrawType::Image; bPropertySet = true; }
+				else if (V == TEXT("box"))      { Brush.DrawAs = ESlateBrushDrawType::Box;   bPropertySet = true; }
+				else if (V == TEXT("border"))   { Brush.DrawAs = ESlateBrushDrawType::Border; bPropertySet = true; }
+				else if (V == TEXT("noddrawtype") || V == TEXT("none") || V == TEXT("notype")) { Brush.DrawAs = ESlateBrushDrawType::NoDrawType; bPropertySet = true; }
+				if (bPropertySet) Image->SetBrush(Brush);
+			}
+			else if (Field == TEXT("tiling") || Field == TEXT("Tiling"))
+			{
+				const FString V = PropertyValue.ToLower();
+				if (V == TEXT("notile") || V == TEXT("none")) { Brush.Tiling = ESlateBrushTileType::NoTile; bPropertySet = true; }
+				else if (V == TEXT("horizontal") || V == TEXT("h")) { Brush.Tiling = ESlateBrushTileType::Horizontal; bPropertySet = true; }
+				else if (V == TEXT("vertical") || V == TEXT("v"))   { Brush.Tiling = ESlateBrushTileType::Vertical;   bPropertySet = true; }
+				else if (V == TEXT("both") || V == TEXT("xy"))      { Brush.Tiling = ESlateBrushTileType::Both;       bPropertySet = true; }
+				if (bPropertySet) Image->SetBrush(Brush);
+			}
+			else if (Field == TEXT("margin") || Field == TEXT("Margin"))
+			{
+				TArray<FString> Parts;
+				PropertyValue.ParseIntoArray(Parts, TEXT(","));
+				if (Parts.Num() == 1)
+				{
+					float V = FCString::Atof(*Parts[0]);
+					Brush.Margin = FMargin(V);
+					Image->SetBrush(Brush);
+					bPropertySet = true;
+				}
+				else if (Parts.Num() >= 4)
+				{
+					Brush.Margin = FMargin(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]),
+					                        FCString::Atof(*Parts[2]), FCString::Atof(*Parts[3]));
+					Image->SetBrush(Brush);
+					bPropertySet = true;
+				}
+			}
+			else if (Field == TEXT("resourceObject") || Field == TEXT("ResourceObject") || Field == TEXT("texture"))
+			{
+				// Accept a texture/material asset path.
+				UObject* Resource = LoadObject<UObject>(nullptr, *PropertyValue);
+				if (Resource)
+				{
+					if (UTexture2D* Tex = Cast<UTexture2D>(Resource))
+					{
+						Image->SetBrushFromTexture(Tex, false);
+						bPropertySet = true;
+					}
+					else if (UMaterialInterface* Mat = Cast<UMaterialInterface>(Resource))
+					{
+						Image->SetBrushFromMaterial(Mat);
+						bPropertySet = true;
+					}
+					else
+					{
+						Brush.SetResourceObject(Resource);
+						Image->SetBrush(Brush);
+						bPropertySet = true;
+					}
+				}
+			}
+		}
+	}
+	else if (UProgressBar* ProgressBar = Cast<UProgressBar>(FoundWidget))
+	{
+		if (PropertyName == TEXT("percent") || PropertyName == TEXT("Percent"))
+		{
+			ProgressBar->SetPercent(FCString::Atof(*PropertyValue));
+			bPropertySet = true;
+		}
+		else if (PropertyName == TEXT("fillColor") || PropertyName == TEXT("FillColorAndOpacity"))
+		{
+			TArray<FString> Components;
+			PropertyValue.ParseIntoArray(Components, TEXT(","));
+			if (Components.Num() >= 3)
+			{
+				float R = FCString::Atof(*Components[0]);
+				float G = FCString::Atof(*Components[1]);
+				float B = FCString::Atof(*Components[2]);
+				float A = Components.Num() >= 4 ? FCString::Atof(*Components[3]) : 1.0f;
+				ProgressBar->SetFillColorAndOpacity(FLinearColor(R, G, B, A));
+				bPropertySet = true;
+			}
+		}
+	}
+	else if (UCheckBox* CheckBox = Cast<UCheckBox>(FoundWidget))
+	{
+		if (PropertyName == TEXT("isChecked") || PropertyName == TEXT("IsChecked"))
+		{
+			bool bChecked = PropertyValue.ToBool();
+			CheckBox->SetIsChecked(bChecked);
+			bPropertySet = true;
+		}
+	}
+	else if (USlider* Slider = Cast<USlider>(FoundWidget))
+	{
+		if (PropertyName == TEXT("value") || PropertyName == TEXT("Value"))
+		{
+			Slider->SetValue(FCString::Atof(*PropertyValue));
+			bPropertySet = true;
+		}
+	}
+	else if (UEditableTextBox* EditableText = Cast<UEditableTextBox>(FoundWidget))
+	{
+		if (PropertyName == TEXT("text") || PropertyName == TEXT("Text"))
+		{
+			EditableText->SetText(FText::FromString(PropertyValue));
+			bPropertySet = true;
+		}
+	}
+	// (#135) SizeBox overrides: UMG 5.1+ requires the Set*Override accessors so the
+	// paired bOverride_ flag is toggled on - ImportText on the raw property doesn't do this.
+	if (!bPropertySet)
+	{
+		if (USizeBox* SizeBox = Cast<USizeBox>(FoundWidget))
+		{
+			const float V = FCString::Atof(*PropertyValue);
+			const FString& N = PropertyName;
+			if (N == TEXT("WidthOverride") || N == TEXT("widthOverride"))       { SizeBox->SetWidthOverride(V);       bPropertySet = true; }
+			else if (N == TEXT("HeightOverride") || N == TEXT("heightOverride")) { SizeBox->SetHeightOverride(V);      bPropertySet = true; }
+			else if (N == TEXT("MinDesiredWidth") || N == TEXT("minDesiredWidth"))   { SizeBox->SetMinDesiredWidth(V);   bPropertySet = true; }
+			else if (N == TEXT("MinDesiredHeight") || N == TEXT("minDesiredHeight")) { SizeBox->SetMinDesiredHeight(V);  bPropertySet = true; }
+			else if (N == TEXT("MaxDesiredWidth") || N == TEXT("maxDesiredWidth"))   { SizeBox->SetMaxDesiredWidth(V);   bPropertySet = true; }
+			else if (N == TEXT("MaxDesiredHeight") || N == TEXT("maxDesiredHeight")) { SizeBox->SetMaxDesiredHeight(V);  bPropertySet = true; }
+			else if (N == TEXT("clearWidthOverride"))  { SizeBox->ClearWidthOverride();  bPropertySet = true; }
+			else if (N == TEXT("clearHeightOverride")) { SizeBox->ClearHeightOverride(); bPropertySet = true; }
+		}
+	}
+
+	// ── Slot properties (slot.anchors, slot.alignment, slot.position, slot.autoSize, slot.*) ──
+	// Case-insensitive: "Slot.padding" and "slot.padding" both route here (#364).
+	if (!bPropertySet && PropertyName.StartsWith(TEXT("slot."), ESearchCase::IgnoreCase))
+	{
+		UPanelSlot* Slot = FoundWidget->Slot;
+		if (Slot)
+		{
+			// #200: slot mutations were getting overwritten when the
+			// subsequent CompileBlueprint regenerated the widget tree without
+			// the source slot ever being marked dirty. Modify() the chain so
+			// the transaction system records the slot before we touch it.
+			WidgetBP->Modify();
+			if (WidgetBP->WidgetTree) WidgetBP->WidgetTree->Modify();
+			FoundWidget->Modify();
+			Slot->Modify();
+
+			FString SlotPropName = PropertyName.Mid(5); // strip "slot."
+
+			// #532: a UE struct-text value ("(Value=2,SizeRule=Fill)",
+			// "(Left=26,Top=22,Right=26,Bottom=24)") or a nested field path
+			// ("Size.Value", "Padding.Left") must write through the real struct,
+			// not the positional comma-parsers below - those split struct text on
+			// commas and silently wrote 0 to the numeric fields while reporting
+			// success. Resolve the path rooted at the SLOT and ImportText into the
+			// struct so every field persists. A genuine parse failure is surfaced
+			// as an error instead of falling through to the lossy parser.
+			{
+				const FString TrimmedVal = PropertyValue.TrimStartAndEnd();
+				const bool bStructText = TrimmedVal.StartsWith(TEXT("("));
+				const bool bNestedPath = SlotPropName.Contains(TEXT("."));
+				if (bStructText || bNestedPath)
+				{
+					TArray<FString> SlotParts;
+					SlotPropName.ParseIntoArray(SlotParts, TEXT("."));
+					UStruct* CurStruct = Slot->GetClass();
+					void* CurContainer = Slot;
+					FProperty* LeafProp = nullptr;
+					for (int32 i = 0; i < SlotParts.Num(); ++i)
+					{
+						FProperty* P = CurStruct->FindPropertyByName(FName(*SlotParts[i]));
+						if (!P) { LeafProp = nullptr; break; }
+						if (i < SlotParts.Num() - 1)
+						{
+							FStructProperty* SP = CastField<FStructProperty>(P);
+							if (!SP) { LeafProp = nullptr; break; }
+							CurContainer = SP->ContainerPtrToValuePtr<void>(CurContainer);
+							CurStruct = SP->Struct;
+						}
+						else
+						{
+							LeafProp = P;
+						}
+					}
+					if (LeafProp)
+					{
+						void* LeafAddr = LeafProp->ContainerPtrToValuePtr<void>(CurContainer);
+						if (LeafProp->ImportText_Direct(*PropertyValue, LeafAddr, Slot, PPF_None))
+						{
+							bPropertySet = true;
+						}
+						else
+						{
+							return MCPError(FString::Printf(
+								TEXT("Value '%s' is not valid for slot property '%s' (type %s). Use UE struct text, e.g. `(Value=1.0,SizeRule=Fill)` for Size or `(Left=8,Top=8,Right=8,Bottom=8)` for Padding."),
+								*PropertyValue, *SlotPropName, *LeafProp->GetCPPType()));
+						}
+					}
+				}
+			}
+
+			// Well-known CanvasPanelSlot properties
+			UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Slot);
+			if (!bPropertySet && CanvasSlot)
+			{
+				if (SlotPropName == TEXT("anchors") || SlotPropName == TEXT("Anchors"))
+				{
+					// Format: "minX,minY,maxX,maxY"  e.g. "0.5,0.5,0.5,0.5" for center
+					TArray<FString> Parts;
+					PropertyValue.ParseIntoArray(Parts, TEXT(","));
+					if (Parts.Num() >= 2)
+					{
+						FAnchors Anchors;
+						Anchors.Minimum = FVector2D(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]));
+						Anchors.Maximum = Parts.Num() >= 4
+							? FVector2D(FCString::Atof(*Parts[2]), FCString::Atof(*Parts[3]))
+							: Anchors.Minimum;
+						CanvasSlot->SetAnchors(Anchors);
+						bPropertySet = true;
+					}
+				}
+				else if (SlotPropName == TEXT("alignment") || SlotPropName == TEXT("Alignment"))
+				{
+					// Format: "x,y"  e.g. "0.5,0.5"
+					TArray<FString> Parts;
+					PropertyValue.ParseIntoArray(Parts, TEXT(","));
+					if (Parts.Num() >= 2)
+					{
+						CanvasSlot->SetAlignment(FVector2D(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1])));
+						bPropertySet = true;
+					}
+				}
+				else if (SlotPropName == TEXT("position") || SlotPropName == TEXT("Position"))
+				{
+					// Format: "x,y"
+					TArray<FString> Parts;
+					PropertyValue.ParseIntoArray(Parts, TEXT(","));
+					if (Parts.Num() >= 2)
+					{
+						CanvasSlot->SetPosition(FVector2D(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1])));
+						bPropertySet = true;
+					}
+				}
+				else if (SlotPropName == TEXT("size") || SlotPropName == TEXT("Size"))
+				{
+					// Format: "x,y"
+					TArray<FString> Parts;
+					PropertyValue.ParseIntoArray(Parts, TEXT(","));
+					if (Parts.Num() >= 2)
+					{
+						CanvasSlot->SetSize(FVector2D(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1])));
+						bPropertySet = true;
+					}
+				}
+				else if (SlotPropName == TEXT("autoSize") || SlotPropName == TEXT("AutoSize"))
+				{
+					CanvasSlot->SetAutoSize(PropertyValue.ToBool());
+					bPropertySet = true;
+				}
+				else if (SlotPropName == TEXT("zOrder") || SlotPropName == TEXT("ZOrder"))
+				{
+					CanvasSlot->SetZOrder(FCString::Atoi(*PropertyValue));
+					bPropertySet = true;
+				}
+			}
+
+			// ── HorizontalBoxSlot / VerticalBoxSlot ──
+			auto TryBoxSlotProps = [&](UPanelSlot* BoxSlot) -> bool
+			{
+				if (SlotPropName == TEXT("padding") || SlotPropName == TEXT("Padding"))
+				{
+					// "L,T,R,B" or uniform "N"
+					TArray<FString> Parts;
+					PropertyValue.ParseIntoArray(Parts, TEXT(","));
+					FMargin Margin;
+					if (Parts.Num() == 1)
+					{
+						float V = FCString::Atof(*Parts[0]);
+						Margin = FMargin(V);
+					}
+					else if (Parts.Num() >= 4)
+					{
+						Margin = FMargin(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]),
+										  FCString::Atof(*Parts[2]), FCString::Atof(*Parts[3]));
+					}
+					else return false;
+
+					if (UHorizontalBoxSlot* HSlot = Cast<UHorizontalBoxSlot>(BoxSlot))
+						HSlot->SetPadding(Margin);
+					else if (UVerticalBoxSlot* VSlot = Cast<UVerticalBoxSlot>(BoxSlot))
+						VSlot->SetPadding(Margin);
+					else if (UOverlaySlot* OSlot = Cast<UOverlaySlot>(BoxSlot))
+						OSlot->SetPadding(Margin);
+					else return false;
+					return true;
+				}
+				if (SlotPropName == TEXT("hAlign") || SlotPropName == TEXT("HorizontalAlignment") || SlotPropName == TEXT("horizontalAlignment"))
+				{
+					EHorizontalAlignment Align = EHorizontalAlignment::HAlign_Fill;
+					FString Val = PropertyValue.ToLower();
+					if (Val == TEXT("left"))        Align = EHorizontalAlignment::HAlign_Left;
+					else if (Val == TEXT("center"))  Align = EHorizontalAlignment::HAlign_Center;
+					else if (Val == TEXT("right"))   Align = EHorizontalAlignment::HAlign_Right;
+					else if (Val == TEXT("fill"))    Align = EHorizontalAlignment::HAlign_Fill;
+
+					if (UHorizontalBoxSlot* HSlot = Cast<UHorizontalBoxSlot>(BoxSlot))
+						HSlot->SetHorizontalAlignment(Align);
+					else if (UVerticalBoxSlot* VSlot = Cast<UVerticalBoxSlot>(BoxSlot))
+						VSlot->SetHorizontalAlignment(Align);
+					else if (UOverlaySlot* OSlot = Cast<UOverlaySlot>(BoxSlot))
+						OSlot->SetHorizontalAlignment(Align);
+					else return false;
+					return true;
+				}
+				if (SlotPropName == TEXT("vAlign") || SlotPropName == TEXT("VerticalAlignment") || SlotPropName == TEXT("verticalAlignment"))
+				{
+					EVerticalAlignment Align = EVerticalAlignment::VAlign_Fill;
+					FString Val = PropertyValue.ToLower();
+					if (Val == TEXT("top"))          Align = EVerticalAlignment::VAlign_Top;
+					else if (Val == TEXT("center"))  Align = EVerticalAlignment::VAlign_Center;
+					else if (Val == TEXT("bottom"))  Align = EVerticalAlignment::VAlign_Bottom;
+					else if (Val == TEXT("fill"))    Align = EVerticalAlignment::VAlign_Fill;
+
+					if (UHorizontalBoxSlot* HSlot = Cast<UHorizontalBoxSlot>(BoxSlot))
+						HSlot->SetVerticalAlignment(Align);
+					else if (UVerticalBoxSlot* VSlot = Cast<UVerticalBoxSlot>(BoxSlot))
+						VSlot->SetVerticalAlignment(Align);
+					else if (UOverlaySlot* OSlot = Cast<UOverlaySlot>(BoxSlot))
+						OSlot->SetVerticalAlignment(Align);
+					else return false;
+					return true;
+				}
+				if (SlotPropName == TEXT("sizeRule") || SlotPropName == TEXT("SizeRule"))
+				{
+					FString Val = PropertyValue.ToLower();
+					ESlateSizeRule::Type Rule = (Val == TEXT("fill")) ? ESlateSizeRule::Fill : ESlateSizeRule::Automatic;
+					if (UHorizontalBoxSlot* HSlot = Cast<UHorizontalBoxSlot>(BoxSlot))
+					{
+						FSlateChildSize Size = HSlot->GetSize();
+						Size.SizeRule = Rule;
+						HSlot->SetSize(Size);
+					}
+					else if (UVerticalBoxSlot* VSlot = Cast<UVerticalBoxSlot>(BoxSlot))
+					{
+						FSlateChildSize Size = VSlot->GetSize();
+						Size.SizeRule = Rule;
+						VSlot->SetSize(Size);
+					}
+					else return false;
+					return true;
+				}
+				if (SlotPropName == TEXT("sizeValue") || SlotPropName == TEXT("SizeValue") || SlotPropName == TEXT("fillWeight"))
+				{
+					float Value = FCString::Atof(*PropertyValue);
+					if (UHorizontalBoxSlot* HSlot = Cast<UHorizontalBoxSlot>(BoxSlot))
+					{
+						FSlateChildSize Size = HSlot->GetSize();
+						Size.Value = Value;
+						HSlot->SetSize(Size);
+					}
+					else if (UVerticalBoxSlot* VSlot = Cast<UVerticalBoxSlot>(BoxSlot))
+					{
+						FSlateChildSize Size = VSlot->GetSize();
+						Size.Value = Value;
+						VSlot->SetSize(Size);
+					}
+					else return false;
+					return true;
+				}
+				// #200: combined size accessor for box slots. Accepts either a
+				// "value,rule" string ("1,fill" / "1.5,automatic") or an
+				// "automatic"/"fill" word for "value=1, rule=...".
+				if (SlotPropName == TEXT("size") || SlotPropName == TEXT("Size"))
+				{
+					FString RuleText = PropertyValue.ToLower();
+					float Value = 1.0f;
+					if (PropertyValue.Contains(TEXT(",")))
+					{
+						TArray<FString> Parts;
+						PropertyValue.ParseIntoArray(Parts, TEXT(","));
+						if (Parts.Num() >= 2)
+						{
+							Value = FCString::Atof(*Parts[0]);
+							RuleText = Parts[1].ToLower().TrimStartAndEnd();
+						}
+					}
+					ESlateSizeRule::Type Rule = (RuleText.Contains(TEXT("fill"))) ? ESlateSizeRule::Fill : ESlateSizeRule::Automatic;
+					FSlateChildSize NewSize;
+					NewSize.SizeRule = Rule;
+					NewSize.Value = Value;
+					if (UHorizontalBoxSlot* HSlot = Cast<UHorizontalBoxSlot>(BoxSlot))
+					{
+						HSlot->SetSize(NewSize);
+					}
+					else if (UVerticalBoxSlot* VSlot = Cast<UVerticalBoxSlot>(BoxSlot))
+					{
+						VSlot->SetSize(NewSize);
+					}
+					else return false;
+					return true;
+				}
+				return false;
+			};
+
+			if (!bPropertySet && (Cast<UHorizontalBoxSlot>(Slot) || Cast<UVerticalBoxSlot>(Slot) || Cast<UOverlaySlot>(Slot)))
+			{
+				bPropertySet = TryBoxSlotProps(Slot);
+			}
+
+			// Generic slot reflection fallback
+			if (!bPropertySet)
+			{
+				FProperty* SlotProp = Slot->GetClass()->FindPropertyByName(FName(*SlotPropName));
+				if (SlotProp)
+				{
+					void* SlotValuePtr = SlotProp->ContainerPtrToValuePtr<void>(Slot);
+					if (SlotProp->ImportText_Direct(*PropertyValue, SlotValuePtr, Slot, PPF_None))
+					{
+						bPropertySet = true;
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: try to set via UObject reflection. Supports dotted paths
+	// (#364) so "Brush.ImageSize" / "ColorAndOpacity.SpecifiedColor.R" /
+	// "Padding.Left" all drill into FStructProperty fields cleanly. The
+	// previous flat lookup quietly failed because FProperty names never
+	// contain dots, so the parent struct was never written.
+	if (!bPropertySet)
+	{
+		TArray<FString> PathParts;
+		PropertyName.ParseIntoArray(PathParts, TEXT("."));
+
+		UStruct* CurrentStruct = FoundWidget->GetClass();
+		void* CurrentContainer = FoundWidget;
+		FProperty* FinalProp = nullptr;
+
+		for (int32 i = 0; i < PathParts.Num(); i++)
+		{
+			FProperty* Prop = CurrentStruct->FindPropertyByName(FName(*PathParts[i]));
+			if (!Prop) break;
+			if (i < PathParts.Num() - 1)
+			{
+				FStructProperty* StructProp = CastField<FStructProperty>(Prop);
+				if (!StructProp) break;
+				CurrentContainer = StructProp->ContainerPtrToValuePtr<void>(CurrentContainer);
+				CurrentStruct = StructProp->Struct;
+			}
+			else
+			{
+				FinalProp = Prop;
+			}
+		}
+
+		if (FinalProp)
+		{
+			void* ValuePtr = FinalProp->ContainerPtrToValuePtr<void>(CurrentContainer);
+			if (FinalProp->ImportText_Direct(*PropertyValue, ValuePtr, FoundWidget, PPF_None))
+			{
+				FoundWidget->PostEditChange();
+				bPropertySet = true;
+			}
+			else
+			{
+				return MCPError(FString::Printf(
+					TEXT("Value '%s' is not valid for property '%s' (type %s). Use UE's text format (e.g. `(X=64,Y=64)` for FVector2D)."),
+					*PropertyValue, *FinalProp->GetName(), *FinalProp->GetCPPType()));
+			}
+		}
+	}
+
+	if (bPropertySet)
+	{
+		// Mark package dirty and save
+		WidgetBP->MarkPackageDirty();
+		FKismetEditorUtilities::CompileBlueprint(WidgetBP);
+		UEditorAssetLibrary::SaveAsset(AssetPath);
+
+		auto Result = MCPSuccess();
+		Result->SetStringField(TEXT("widgetName"), WidgetName);
+		Result->SetStringField(TEXT("propertyName"), PropertyName);
+		Result->SetStringField(TEXT("propertyValue"), PropertyValue);
+
+		return MCPResult(Result);
+	}
+	else
+	{
+		return MCPError(FString::Printf(TEXT("Failed to set property '%s' on widget '%s'. Property not found or value format invalid."), *PropertyName, *WidgetName));
+	}
+}
+
+
+TSharedPtr<FJsonValue> FWidgetHandlers::ReadWidgetAnimations(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+
+	TArray<TSharedPtr<FJsonValue>> AnimationsArray;
+
+	for (UWidgetAnimation* Animation : WidgetBP->Animations)
+	{
+		if (!Animation) continue;
+
+		TSharedPtr<FJsonObject> AnimObj = MakeShared<FJsonObject>();
+		AnimObj->SetStringField(TEXT("name"), Animation->GetName());
+		AnimObj->SetStringField(TEXT("displayName"), Animation->GetDisplayLabel().IsEmpty() ? Animation->GetName() : Animation->GetDisplayLabel());
+
+		UMovieScene* MovieScene = Animation->GetMovieScene();
+		if (MovieScene)
+		{
+			// Duration / range
+			FFrameRate TickResolution = MovieScene->GetTickResolution();
+			FFrameRate DisplayRate = MovieScene->GetDisplayRate();
+			TRange<FFrameNumber> PlaybackRange = MovieScene->GetPlaybackRange();
+
+			if (PlaybackRange.HasLowerBound() && PlaybackRange.HasUpperBound())
+			{
+				double StartSeconds = TickResolution.AsSeconds(PlaybackRange.GetLowerBoundValue());
+				double EndSeconds = TickResolution.AsSeconds(PlaybackRange.GetUpperBoundValue());
+				AnimObj->SetNumberField(TEXT("startTime"), StartSeconds);
+				AnimObj->SetNumberField(TEXT("endTime"), EndSeconds);
+				AnimObj->SetNumberField(TEXT("duration"), EndSeconds - StartSeconds);
+			}
+
+			AnimObj->SetNumberField(TEXT("displayRate"), DisplayRate.Numerator);
+
+			// Tracks (bindings)
+			TArray<TSharedPtr<FJsonValue>> BindingsArray;
+			const UMovieScene* ConstMovieScene = MovieScene;
+			const TArray<FMovieSceneBinding>& Bindings = ConstMovieScene->GetBindings();
+			for (const FMovieSceneBinding& Binding : Bindings)
+			{
+				TSharedPtr<FJsonObject> BindingObj = MakeShared<FJsonObject>();
+
+				// FMovieSceneBinding::GetName() is deprecated; look up the name from possessable/spawnable instead
+				FGuid ObjectGuid = Binding.GetObjectGuid();
+				FString BindingName;
+				FMovieScenePossessable* Possessable = MovieScene->FindPossessable(ObjectGuid);
+				if (Possessable)
+				{
+					BindingName = Possessable->GetName();
+				}
+				else
+				{
+					FMovieSceneSpawnable* Spawnable = MovieScene->FindSpawnable(ObjectGuid);
+					if (Spawnable)
+					{
+						BindingName = Spawnable->GetName();
+					}
+				}
+
+				BindingObj->SetStringField(TEXT("name"), BindingName);
+				BindingObj->SetStringField(TEXT("id"), ObjectGuid.ToString());
+
+				TArray<TSharedPtr<FJsonValue>> TracksArray;
+				for (UMovieSceneTrack* Track : Binding.GetTracks())
+				{
+					if (!Track) continue;
+					TSharedPtr<FJsonObject> TrackObj = MakeShared<FJsonObject>();
+					TrackObj->SetStringField(TEXT("name"), Track->GetDisplayName().ToString());
+					TrackObj->SetStringField(TEXT("class"), Track->GetClass()->GetName());
+					TrackObj->SetNumberField(TEXT("sectionCount"), Track->GetAllSections().Num());
+					TracksArray.Add(MakeShared<FJsonValueObject>(TrackObj));
+				}
+				BindingObj->SetArrayField(TEXT("tracks"), TracksArray);
+
+				BindingsArray.Add(MakeShared<FJsonValueObject>(BindingObj));
+			}
+			AnimObj->SetArrayField(TEXT("bindings"), BindingsArray);
+
+			// Master tracks (non-bound tracks)
+			TArray<TSharedPtr<FJsonValue>> MasterTracksArray;
+			for (UMovieSceneTrack* Track : MovieScene->GetTracks())
+			{
+				if (!Track) continue;
+				TSharedPtr<FJsonObject> TrackObj = MakeShared<FJsonObject>();
+				TrackObj->SetStringField(TEXT("name"), Track->GetDisplayName().ToString());
+				TrackObj->SetStringField(TEXT("class"), Track->GetClass()->GetName());
+				MasterTracksArray.Add(MakeShared<FJsonValueObject>(TrackObj));
+			}
+			AnimObj->SetArrayField(TEXT("masterTracks"), MasterTracksArray);
+		}
+
+		AnimationsArray.Add(MakeShared<FJsonValueObject>(AnimObj));
+	}
+
+	auto Result = MCPSuccess();
+	Result->SetArrayField(TEXT("animations"), AnimationsArray);
+	Result->SetNumberField(TEXT("count"), AnimationsArray.Num());
+
+	return MCPResult(Result);
+}
+
+// #563: set a full or nested style struct on a widget from JSON. Uses the
+// generic JSON->property setter so FButtonStyle / FEditableTextBoxStyle /
+// FSlateFontInfo / FSlateColor and their nested brushes are all expressible,
+// which the scalar set_widget_property path cannot do.
+static UWidget* FindWidgetByName(UWidgetBlueprint* WidgetBP, const FString& Name)
+{
+	UWidget* Found = nullptr;
+	if (WidgetBP && WidgetBP->WidgetTree)
+	{
+		WidgetBP->WidgetTree->ForEachWidget([&](UWidget* W)
+		{
+			if (W && W->GetName() == Name && !Found) Found = W;
+		});
+	}
+	return Found;
+}
+
+TSharedPtr<FJsonValue> FWidgetHandlers::SetWidgetStyle(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+	FString WidgetName;
+	if (auto Err = RequireString(Params, TEXT("widgetName"), WidgetName)) return Err;
+	FString PropertyName;
+	if (auto Err = RequireString(Params, TEXT("propertyName"), PropertyName)) return Err;
+	TSharedPtr<FJsonValue> ValueField = Params->TryGetField(TEXT("value"));
+	if (!ValueField.IsValid()) return MCPError(TEXT("Missing 'value' (a JSON object/scalar for the style)"));
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+	if (!WidgetBP->WidgetTree) return MCPWidget::MissingWidgetTreeError(AssetPath);
+
+	UWidget* Widget = FindWidgetByName(WidgetBP, WidgetName);
+	if (!Widget) return MCPError(FString::Printf(TEXT("Widget not found: %s"), *WidgetName));
+
+	FProperty* Prop = Widget->GetClass()->FindPropertyByName(FName(*PropertyName));
+	if (!Prop) return MCPError(FString::Printf(TEXT("Property '%s' not found on %s"), *PropertyName, *Widget->GetClass()->GetName()));
+
+	Widget->Modify();
+	void* ValuePtr = Prop->ContainerPtrToValuePtr<void>(Widget);
+	FString SetErr;
+	if (!MCPJsonProperty::SetJsonOnProperty(Prop, ValuePtr, ValueField, SetErr))
+	{
+		return MCPError(FString::Printf(TEXT("Failed to set '%s': %s"), *PropertyName, *SetErr));
+	}
+	FKismetEditorUtilities::CompileBlueprint(WidgetBP);
+	SaveAssetPackage(WidgetBP);
+
+	auto Result = MCPSuccess();
+	MCPSetUpdated(Result);
+	Result->SetStringField(TEXT("assetPath"), AssetPath);
+	Result->SetStringField(TEXT("widgetName"), WidgetName);
+	Result->SetStringField(TEXT("propertyName"), PropertyName);
+	return MCPResult(Result);
+}
+
+// #563: apply many {widgetName, propertyName, value} style/property writes to a
+// WidgetBlueprint in one call (single compile + save).
+TSharedPtr<FJsonValue> FWidgetHandlers::BulkSetWidgetProperties(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+	const TArray<TSharedPtr<FJsonValue>>* Entries = nullptr;
+	if (!Params->TryGetArrayField(TEXT("properties"), Entries) || !Entries)
+	{
+		return MCPError(TEXT("Missing 'properties' array ([{widgetName, propertyName, value}])"));
+	}
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+	if (!WidgetBP->WidgetTree) return MCPWidget::MissingWidgetTreeError(AssetPath);
+
+	TArray<TSharedPtr<FJsonValue>> Results;
+	int32 Applied = 0, Failed = 0;
+	for (const TSharedPtr<FJsonValue>& EV : *Entries)
+	{
+		const TSharedPtr<FJsonObject>* EObj = nullptr;
+		if (!EV->TryGetObject(EObj) || !EObj) { ++Failed; continue; }
+		FString WName, PName;
+		(*EObj)->TryGetStringField(TEXT("widgetName"), WName);
+		(*EObj)->TryGetStringField(TEXT("propertyName"), PName);
+		TSharedPtr<FJsonValue> Val = (*EObj)->TryGetField(TEXT("value"));
+		TSharedPtr<FJsonObject> R = MakeShared<FJsonObject>();
+		R->SetStringField(TEXT("widgetName"), WName);
+		R->SetStringField(TEXT("propertyName"), PName);
+
+		UWidget* Widget = FindWidgetByName(WidgetBP, WName);
+		if (!Widget || WName.IsEmpty() || PName.IsEmpty() || !Val.IsValid())
+		{
+			R->SetBoolField(TEXT("ok"), false);
+			R->SetStringField(TEXT("error"), TEXT("widget/property/value missing"));
+			Results.Add(MakeShared<FJsonValueObject>(R)); ++Failed; continue;
+		}
+		FProperty* Prop = Widget->GetClass()->FindPropertyByName(FName(*PName));
+		if (!Prop)
+		{
+			R->SetBoolField(TEXT("ok"), false);
+			R->SetStringField(TEXT("error"), TEXT("property not found"));
+			Results.Add(MakeShared<FJsonValueObject>(R)); ++Failed; continue;
+		}
+		Widget->Modify();
+		FString SetErr;
+		if (MCPJsonProperty::SetJsonOnProperty(Prop, Prop->ContainerPtrToValuePtr<void>(Widget), Val, SetErr))
+		{
+			R->SetBoolField(TEXT("ok"), true); ++Applied;
+		}
+		else
+		{
+			R->SetBoolField(TEXT("ok"), false);
+			R->SetStringField(TEXT("error"), SetErr);
+			++Failed;
+		}
+		Results.Add(MakeShared<FJsonValueObject>(R));
+	}
+
+	FKismetEditorUtilities::CompileBlueprint(WidgetBP);
+	SaveAssetPackage(WidgetBP);
+
+	auto Result = MCPSuccess();
+	Result->SetStringField(TEXT("assetPath"), AssetPath);
+	Result->SetNumberField(TEXT("applied"), Applied);
+	Result->SetNumberField(TEXT("failed"), Failed);
+	Result->SetArrayField(TEXT("results"), Results);
+	return MCPResult(Result);
+}
+
+// #635/#21: reorder a widget among its parent panel's children (move to a
+// specific sibling index). move_widget only reparents; this shifts order,
+// e.g. inserting a new row BETWEEN two existing children.
+TSharedPtr<FJsonValue> FWidgetHandlers::ReorderChild(const TSharedPtr<FJsonObject>& Params)
+{
+	FString AssetPath;
+	if (auto Err = RequireStringAlt(Params, TEXT("assetPath"), TEXT("path"), AssetPath)) return Err;
+	FString WidgetName;
+	if (auto Err = RequireString(Params, TEXT("widgetName"), WidgetName)) return Err;
+	if (!Params->HasField(TEXT("index"))) return MCPError(TEXT("Missing 'index'"));
+	const int32 NewIndex = (int32)Params->GetNumberField(TEXT("index"));
+
+	TSharedPtr<FJsonValue> ResolveError;
+	UWidgetBlueprint* WidgetBP = MCPWidget::ResolveWidgetBlueprintOrError(AssetPath, ResolveError);
+	if (!WidgetBP) return ResolveError;
+	if (!WidgetBP->WidgetTree) return MCPWidget::MissingWidgetTreeError(AssetPath);
+	UWidget* Widget = FindWidgetByName(WidgetBP, WidgetName);
+	if (!Widget) return MCPError(FString::Printf(TEXT("Widget not found: %s"), *WidgetName));
+
+	UPanelWidget* Parent = Widget->GetParent();
+	if (!Parent) return MCPError(FString::Printf(TEXT("Widget '%s' has no parent panel (is it the root?)"), *WidgetName));
+
+	const int32 Count = Parent->GetChildrenCount();
+	const int32 ClampedIndex = FMath::Clamp(NewIndex, 0, Count - 1);
+	const int32 OldIndex = Parent->GetChildIndex(Widget);
+
+	Parent->Modify();
+	Parent->ShiftChild(ClampedIndex, Widget);
+	FKismetEditorUtilities::CompileBlueprint(WidgetBP);
+	SaveAssetPackage(WidgetBP);
+
+	auto Result = MCPSuccess();
+	MCPSetUpdated(Result);
+	Result->SetStringField(TEXT("assetPath"), AssetPath);
+	Result->SetStringField(TEXT("widgetName"), WidgetName);
+	Result->SetStringField(TEXT("parent"), Parent->GetName());
+	Result->SetNumberField(TEXT("oldIndex"), OldIndex);
+	Result->SetNumberField(TEXT("newIndex"), ClampedIndex);
+	return MCPResult(Result);
+}

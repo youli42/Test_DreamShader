@@ -1,0 +1,6 @@
+[submodule "Plugins/DreamShader"]
+	path = Plugins/DreamShader
+	url = https://github.com/youli42/DreamShader.git
+[submodule "Plugins/vapor"]
+	path = Plugins/vapor
+	url = https://github.com/youli42/vapor.git

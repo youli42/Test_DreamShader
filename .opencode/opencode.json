@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "ue-mcp": {
+      "type": "local",
+      "command": [
+        "npx",
+        "ue-mcp",
+        "./Test_DreamShader.uproject"
+      ],
+      "enabled": true
+    }
+  }
+}

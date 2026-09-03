@@ -1,0 +1,32 @@
+ue-mcp:
+  version: 1
+
+# Custom tasks - pre-fill options for built-in actions
+# All built-in actions are available without listing them here.
+#
+# tasks:
+#   import_hero:
+#     class_path: ue-mcp.bridge
+#     options:
+#       method: import_skeletal_mesh
+#       filePath: Meshes/hero_sk.fbx
+#       packagePath: /Game/Characters/Hero
+
+tasks: {}
+
+# Flows compose tasks into repeatable multi-step sequences.
+#
+# flows:
+#   fresh_level:
+#     description: Blank level with basic lighting
+#     steps:
+#       1:
+#         task: level.create
+#         options:
+#           name: Sandbox
+#       2:
+#         task: level.spawn_light
+#         options:
+#           type: DirectionalLight
+
+flows: {}

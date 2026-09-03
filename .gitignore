@@ -37,6 +37,10 @@
 
 !/.vsconfig
 
+# clangd / clang-format 配置（供 clangd LSP 与格式化使用）
+!/.clangd
+!/.clang-format
+
 # ===============================
 # 添加：其AI相关配置文件
 # ===============================
@@ -52,6 +56,9 @@
 
 # readme
 !/[Rr][Ee][Aa][Dd][Mm][Ee].[Mm][Dd]
+
+# 项目文档
+!/docs/**/*
 
 # 开源协议
 !/LICENSE
