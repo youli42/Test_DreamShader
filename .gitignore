@@ -75,6 +75,9 @@ ue-mcp.local.yml
 # 忽视：操作系统/平台生成的文件
 # ===============================
 
+# Python
+/**/__pycache__/**/*
+
 # Windows
 ehthumbs.db
 Thumbs.db

@@ -28,7 +28,7 @@
 		},
 		{
 			"Name": "Vapor",
-			"Enabled": true
+			"Enabled": false
 		}
 	]
 }
