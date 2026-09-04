@@ -29,6 +29,10 @@
 		{
 			"Name": "Vapor",
 			"Enabled": false
+		},
+		{
+			"Name": "Vapor",
+			"Enabled": true
 		}
 	]
 }
