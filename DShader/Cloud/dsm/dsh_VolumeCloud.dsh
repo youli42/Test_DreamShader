@@ -1,0 +1,18 @@
+// dsh_VolumeCloud.dsh -- a DreamShader header: functions shared by the materials that import it.
+// Import it from a .dsm with:  import "dsh_VolumeCloud.dsh";
+Function float Luma(in vec3 color)
+{
+    return dot(color, float3(0.299, 0.587, 0.114));
+}
+
+// SkyCoordDebug -- 世界坐标可视化。把世界 XY（cm）按瓦片边长（km）平铺，
+// 取每个 2km 格内的分数坐标拼成 (x, y, 0) 的 RGB，接入 basecode 即可直观看到天空坐标分布。
+// 对应节点图：AbsoluteWorldPosition.xy -> Divide(TileKm*100000) -> Frac -> Append(0) -> DebugUV。
+// UE.WorldPosition() 会被提升为真实节点，并作为该 Custom 节点的引脚输入。
+GraphFunction float3 SkyCoordDebug(in float Tile_Km)
+{
+    float3 wp     = UE.WorldPosition();
+    float  tileCm = Tile_Km * 100000.0;      // km -> cm，与世界位置单位对齐
+    float2 uv     = frac(wp.xy / tileCm);
+    return float3(uv, 0.0);
+}

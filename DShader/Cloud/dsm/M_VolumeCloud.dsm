@@ -1,10 +1,32 @@
 // M_VolumeCloud.dsm -- a DreamShader material. Compiles to /Game/Cloud/dsm/M_VolumeCloud.
+import "dsh_VolumeCloud.dsh"
 Shader(Name="Cloud/dsm/M_VolumeCloud")
 {
     Properties = {
         vec3 BaseColor = vec3(1.0, 1.0, 1.0) [
+            Group = "体积云基础参数"; SortPriority = 10;
             Description = "云体基础颜色乘数";
             ParameterName = "基础色";
+        ];
+        vec3 EmissiveColor = vec3(0.0, 0.0, 0.0) [
+            Group = "体积云基础参数"; SortPriority = 20;
+            Description = "云体自发光颜色乘数";
+            ParameterName = "自发光色";
+        ];
+        vec3 Extinction = vec3(1.0, 1.0, 1.0) [
+            Group = "体积云基础参数"; SortPriority = 30;
+            Description = "背光边缘颜色";
+            ParameterName = "消光颜色";
+        ];
+        float AmbientOcclusion = 1.0 [
+            Group = "体积云基础参数"; SortPriority = 40;
+            Description = "AO";
+            ParameterName = "AO";
+        ];
+        float Tile_Km = 10.0 [
+            Group = "体积云Debug"; SortPriority = 10; Slider(0.5, 8);
+            Description = "天空坐标网格瓦片边长(km)，可视化每 TileKm km 一格";
+            ParameterName = "网格瓦片(km)";
         ];
         float PhaseG = 0.6 [
             Group = "体积云高级参数"; SortPriority = 20; Slider(-1, 1);
@@ -36,7 +58,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             Description = "多次散射偏心率，影响多次散射光的方向分布";
             ParameterName = "多次散射偏心率";
         ];
-        float ConservativeDensity = 0.0 [
+        float ConservativeDensity = 1.0 [
             Group = "体积云高级参数"; SortPriority = 80; Slider(0, 1);
             Description = "保守密度阈值，低于此密度的区域视为无云";
             ParameterName = "保守密度";
@@ -44,18 +66,15 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
     }
 
     Settings = {
-        Domain = "Volume";
+        Domain = "Volume"; // 体积云必要开关
         ShadingModel = "DefaultLit";
-        UsedWithVolumetricCloud = "true";
+        UsedWithVolumetricCloud = "true"; // 体积云必要开关
         BlendMode = "Additive";
         Backend = "ThinCustom";
     }
 
     Outputs = {
         // ==== 基础参数 ====
-        vec3 _Color;
-
-        Base.BaseColor = _Color;
 
         // ==== 高级参数 ====
         // 告诉着色器，光如何被水滴散射
@@ -133,7 +152,16 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
     }
 
     Graph = {
-        _Color = BaseColor;
+        
+        Substrate Surface = Substrate.VolumetricFogCloud(
+            // Albedo=BaseColor, 
+            Albedo=SkyCoordDebug(Tile_Km), // 天空坐标可视化：按 TileKm(km) 平铺的网格 RGB，接入基础色便于观察坐标分布（调试用，可替换为 BaseColor）
+            EmissiveColor=EmissiveColor, 
+            Extinction=Extinction, 
+            AmbientOcclusion=AmbientOcclusion
+        );
+        
+        Base.FrontMaterial = Surface; // 输出
 
         // 高级参数计算
         _PhaseG_Out = PhaseG;
@@ -143,5 +171,6 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
         _MultiScatteringOcclusion_Out = MultiScatteringOcclusion;
         _MultiScatteringEccentricity_Out = MultiScatteringEccentricity;
         _ConservativeDensity_Out = ConservativeDensity;
+
     }
 }
