@@ -8,6 +8,16 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             Description = "云体基础颜色乘数";
             ParameterName = "基础色";
         ];
+        Texture2D CloudTexture = Path(Engine, "Functions/Engine_MaterialFunctions02/ExampleContent/Textures/SphereRenderMask") [
+            Group = "体积云基础参数"; SortPriority = 15;
+            Description = "云体纹理";
+            ParameterName = "体积云贴图";
+        ];
+        float UV_Scale = 1.0 [
+            Group = "体积云基础参数"; SortPriority = 18; Slider(0.01, 8);
+            Description = "体积云贴图的 UV 缩放";
+            ParameterName = "贴图UV缩放";
+        ];
         vec3 EmissiveColor = vec3(0.0, 0.0, 0.0) [
             Group = "体积云基础参数"; SortPriority = 20;
             Description = "云体自发光颜色乘数";
@@ -152,17 +162,10 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
     }
 
     Graph = {
+        float2 WP_UV = UE.WorldPosition().xy;
+        WP_UV = WP_UV / (UV_Scale * 100000);
+        vec3 CloudTex = UE.TextureSample(OutputType="float3", Coordinates=WP_UV, TextureObject=CloudTexture);
         
-        Substrate Surface = Substrate.VolumetricFogCloud(
-            // Albedo=BaseColor, 
-            Albedo=SkyCoordDebug(Tile_Km), // 天空坐标可视化：按 TileKm(km) 平铺的网格 RGB，接入基础色便于观察坐标分布（调试用，可替换为 BaseColor）
-            EmissiveColor=EmissiveColor, 
-            Extinction=Extinction, 
-            AmbientOcclusion=AmbientOcclusion
-        );
-        
-        Base.FrontMaterial = Surface; // 输出
-
         // 高级参数计算
         _PhaseG_Out = PhaseG;
         _PhaseG2_Out = PhaseG2;
@@ -170,7 +173,21 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
         _MultiScatteringContribution_Out = MultiScatteringContribution;
         _MultiScatteringOcclusion_Out = MultiScatteringOcclusion;
         _MultiScatteringEccentricity_Out = MultiScatteringEccentricity;
-        _ConservativeDensity_Out = ConservativeDensity;
+        _ConservativeDensity_Out = CloudTex.r;
+
+        // float Ext = UE.VolumetricAdvancedMaterialInput(OutputType="float");
+        float Ext = UE.ComponentMask(OutputType="float", Input=UE.VolumetricAdvancedMaterialInput(OutputType="float"), R=true, G=false, B=false);
+
+        Substrate Surface = Substrate.VolumetricFogCloud(
+            Albedo=BaseColor, 
+            // Albedo=SkyCoordDebug(Tile_Km), // 天空坐标可视化：按 TileKm(km) 平铺的网格 RGB，接入基础色便于观察坐标分布（调试用，可替换为 BaseColor）
+            EmissiveColor=EmissiveColor, 
+            // Extinction=Extinction, 
+            Extinction=Ext, 
+            AmbientOcclusion=AmbientOcclusion
+        );
+
+        Base.FrontMaterial = Surface; // 输出
 
     }
 }
