@@ -1,0 +1,147 @@
+// M_VolumeCloud.dsm -- a DreamShader material. Compiles to /Game/Cloud/dsm/M_VolumeCloud.
+Shader(Name="Cloud/dsm/M_VolumeCloud")
+{
+    Properties = {
+        vec3 BaseColor = vec3(1.0, 1.0, 1.0) [
+            Description = "云体基础颜色乘数";
+            ParameterName = "基础色";
+        ];
+        float PhaseG = 0.6 [
+            Group = "体积云高级参数"; SortPriority = 20; Slider(-1, 1);
+            Description = "主相位函数不对称因子，正值使光向前散射（朝太阳方向）";
+            ParameterName = "相位G";
+        ];
+        float PhaseG2 = -0.4 [
+            Group = "体积云高级参数"; SortPriority = 30; Slider(-1, 1);
+            Description = "第二相位函数不对称因子，用于更真实的光散射";
+            ParameterName = "相位G2";
+        ];
+        float PhaseBlend = 0.4 [
+            Group = "体积云高级参数"; SortPriority = 40; Slider(0, 1);
+            Description = "两个相位函数之间的混合系数";
+            ParameterName = "相位混合";
+        ];
+        float MultiScatteringContribution = 1.0 [
+            Group = "体积云高级参数"; SortPriority = 50; Slider(0, 2);
+            Description = "多次散射近似贡献值，模拟光在云内多次反弹";
+            ParameterName = "多次散射贡献";
+        ];
+        float MultiScatteringOcclusion = 0.2 [
+            Group = "体积云高级参数"; SortPriority = 60; Slider(0, 1);
+            Description = "多次散射遮蔽系数，控制云内部自遮挡强度";
+            ParameterName = "多次散射遮蔽";
+        ];
+        float MultiScatteringEccentricity = 0.5 [
+            Group = "体积云高级参数"; SortPriority = 70; Slider(-1, 1);
+            Description = "多次散射偏心率，影响多次散射光的方向分布";
+            ParameterName = "多次散射偏心率";
+        ];
+        float ConservativeDensity = 0.0 [
+            Group = "体积云高级参数"; SortPriority = 80; Slider(0, 1);
+            Description = "保守密度阈值，低于此密度的区域视为无云";
+            ParameterName = "保守密度";
+        ];
+    }
+
+    Settings = {
+        Domain = "Volume";
+        ShadingModel = "DefaultLit";
+        UsedWithVolumetricCloud = "true";
+        BlendMode = "Additive";
+        Backend = "ThinCustom";
+    }
+
+    Outputs = {
+        // ==== 基础参数 ====
+        vec3 _Color;
+
+        Base.BaseColor = _Color;
+
+        // ==== 高级参数 ====
+        // 告诉着色器，光如何被水滴散射
+
+        // 终端输出节点：没有输出引脚，只能在 Outputs 块用 Expression(...).Pin[i] 喂入
+        float _PhaseG_Out;
+        float _PhaseG2_Out;
+        float _PhaseBlend_Out;
+        float _MultiScatteringContribution_Out;
+        float _MultiScatteringOcclusion_Out;
+        float _MultiScatteringEccentricity_Out;
+        // 上面的云参数性能消耗都不大
+        float _ConservativeDensity_Out;
+
+        // Pin 索引来自 material-expressions.json (UMaterialExpressionVolumetricAdvancedMaterialOutput):
+        //   0=PhaseG, 1=PhaseG2, 2=PhaseBlend, 3=MultiScatteringContribution,
+        //   4=MultiScatteringOcclusion, 5=MultiScatteringEccentricity, 6=ConservativeDensity
+        // 非引脚选项全部使用默认值，保证 7 个绑定共享同一个节点
+        Expression(Class="VolumetricAdvancedMaterialOutput",
+            PerSamplePhaseEvaluation="false",
+            MultiScatteringApproximationOctaveCount=0,
+            bGroundContribution="false",
+            bGrayScaleMaterial="false",
+            bRayMarchVolumeShadow="true",
+            bClampMultiScatteringContribution="true"
+        ).Pin[0] = _PhaseG_Out;           // 相位G
+        Expression(Class="VolumetricAdvancedMaterialOutput",
+            PerSamplePhaseEvaluation="false",
+            MultiScatteringApproximationOctaveCount=0,
+            bGroundContribution="false",
+            bGrayScaleMaterial="false",
+            bRayMarchVolumeShadow="true",
+            bClampMultiScatteringContribution="true"
+        ).Pin[1] = _PhaseG2_Out;          // 相位G2
+        Expression(Class="VolumetricAdvancedMaterialOutput",
+            PerSamplePhaseEvaluation="false",
+            MultiScatteringApproximationOctaveCount=0,
+            bGroundContribution="false",
+            bGrayScaleMaterial="false",
+            bRayMarchVolumeShadow="true",
+            bClampMultiScatteringContribution="true"
+        ).Pin[2] = _PhaseBlend_Out;       // 相位混合
+        Expression(Class="VolumetricAdvancedMaterialOutput",
+            PerSamplePhaseEvaluation="false",
+            MultiScatteringApproximationOctaveCount=0,
+            bGroundContribution="false",
+            bGrayScaleMaterial="false",
+            bRayMarchVolumeShadow="true",
+            bClampMultiScatteringContribution="true"
+        ).Pin[3] = _MultiScatteringContribution_Out; // 多次散射贡献
+        Expression(Class="VolumetricAdvancedMaterialOutput",
+            PerSamplePhaseEvaluation="false",
+            MultiScatteringApproximationOctaveCount=0,
+            bGroundContribution="false",
+            bGrayScaleMaterial="false",
+            bRayMarchVolumeShadow="true",
+            bClampMultiScatteringContribution="true"
+        ).Pin[4] = _MultiScatteringOcclusion_Out;     // 多次散射遮蔽
+        Expression(Class="VolumetricAdvancedMaterialOutput",
+            PerSamplePhaseEvaluation="false",
+            MultiScatteringApproximationOctaveCount=0,
+            bGroundContribution="false",
+            bGrayScaleMaterial="false",
+            bRayMarchVolumeShadow="true",
+            bClampMultiScatteringContribution="true"
+        ).Pin[5] = _MultiScatteringEccentricity_Out;  // 多次散射偏心率
+        Expression(Class="VolumetricAdvancedMaterialOutput",
+            PerSamplePhaseEvaluation="false",
+            MultiScatteringApproximationOctaveCount=0,
+            bGroundContribution="false",
+            bGrayScaleMaterial="false",
+            bRayMarchVolumeShadow="true",
+            bClampMultiScatteringContribution="true"
+        ).Pin[6] = _ConservativeDensity_Out;           // 保守密度
+    }
+
+    Graph = {
+        _Color = BaseColor;
+
+        // 高级参数计算
+        _PhaseG_Out = PhaseG;
+        _PhaseG2_Out = PhaseG2;
+        _PhaseBlend_Out = PhaseBlend;
+        _MultiScatteringContribution_Out = MultiScatteringContribution;
+        _MultiScatteringOcclusion_Out = MultiScatteringOcclusion;
+        _MultiScatteringEccentricity_Out = MultiScatteringEccentricity;
+        _ConservativeDensity_Out = ConservativeDensity;
+    }
+}

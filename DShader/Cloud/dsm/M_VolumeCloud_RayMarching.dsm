@@ -192,12 +192,19 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
                 }
                 return RESULT;
             }",
-            CloudTex = CloudTex, CloudColor = CloudColor,
-            CloudOpacityStrength = CloudOpacityStrength, CloudSteps = CloudSteps,
-            CloudShadowSteps = CloudShadowSteps, CloudShadowRange = CloudShadowRange,
-            CloudShadowOffset = CloudShadowOffset, CloudShadowStrength = CloudShadowStrength,
-            CloudSilverLining = CloudSilverLining, CloudSilverLiningBackPower = CloudSilverLiningBackPower,
-            CloudDitherScale = CloudDitherScale, CloudAmbient = CloudAmbient);
+            CloudTex = CloudTex, 
+            CloudColor = CloudColor,
+            CloudOpacityStrength = CloudOpacityStrength, 
+            CloudSteps = CloudSteps,
+            CloudShadowSteps = CloudShadowSteps, 
+            CloudShadowRange = CloudShadowRange,
+            CloudShadowOffset = CloudShadowOffset, 
+            CloudShadowStrength = CloudShadowStrength,
+            CloudSilverLining = CloudSilverLining, 
+            CloudSilverLiningBackPower = CloudSilverLiningBackPower,
+            CloudDitherScale = CloudDitherScale, 
+            CloudAmbient = CloudAmbient
+        );
 
         vec3  WPO = UE.Expression(Class = "Custom", OutputType = "float3",
             Code = "{
