@@ -102,3 +102,7 @@ Session.vim
 
 # Visual Studio
 .vs
+
+Content/Cloud/dsm/M_VolumeCloud.uasset
+Content/M_Test.uasset
+DShader/Decompiled/Materials/Game/M_Test.dsm

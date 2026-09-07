@@ -1,0 +1,42 @@
+// Decompiled from /Engine/Transient.MB_DreamThinBase_Decompiled_Materials_Game_M_Test
+Shader(Name="Decompiled/Materials/Engine/Transient")
+{
+	Properties = {
+		ScalarParameter Param_1 = 10.0;
+	}
+
+	Settings = {
+		Domain = "Volume";
+		ShadingModel = "DefaultLit";
+		BlendMode = "Additive";
+		bUsedWithVolumetricCloud = false;
+	}
+
+	Outputs = {
+		float3 BaseColor;
+
+		Base.BaseColor = BaseColor;
+	}
+
+	Graph = {
+		float3 Param =
+			UE.Expression(
+				Class="CurveAtlasRowParameter",
+				OutputType="float3",
+				ParameterName="Param",
+				DefaultValue=0.0,
+				Curve=Path(Game, "Cloud/Texture/Curves/Curve_CloudExt"),
+				Atlas=Path(Game, "Cloud/Texture/Curves/Atlas_Cloud"),
+				CurveTime=Param_1
+			);
+		float3 DS_BaseColor_5 = Param;
+
+		BaseColor = DS_BaseColor_5;
+	}
+
+	Layout = {
+		Node(Var="Param_1", X=-544, Y=272);
+		Node(Var="Param", X=-320, Y=256);
+	}
+
+}

@@ -3,75 +3,94 @@ import "dsh_VolumeCloud.dsh"
 Shader(Name="Cloud/dsm/M_VolumeCloud")
 {
     Properties = {
-        vec3 BaseColor = vec3(1.0, 1.0, 1.0) [
+        // 体积云基础参数
+        vec3 _BaseColor = vec3(1.0, 1.0, 1.0) [
             Group = "体积云基础参数"; SortPriority = 10;
             Description = "云体基础颜色乘数";
             ParameterName = "基础色";
         ];
-        Texture2D CloudTexture = Path(Engine, "Functions/Engine_MaterialFunctions02/ExampleContent/Textures/SphereRenderMask") [
-            Group = "体积云基础参数"; SortPriority = 15;
-            Description = "云体纹理";
-            ParameterName = "体积云贴图";
-        ];
-        float UV_Scale = 1.0 [
-            Group = "体积云基础参数"; SortPriority = 18; Slider(0.01, 8);
-            Description = "体积云贴图的 UV 缩放";
-            ParameterName = "贴图UV缩放";
-        ];
-        vec3 EmissiveColor = vec3(0.0, 0.0, 0.0) [
+        vec3 _EmissiveColor = vec3(0.0, 0.0, 0.0) [
             Group = "体积云基础参数"; SortPriority = 20;
             Description = "云体自发光颜色乘数";
             ParameterName = "自发光色";
         ];
-        vec3 Extinction = vec3(1.0, 1.0, 1.0) [
+        vec3 _Extinction = vec3(1.0, 1.0, 1.0) [
             Group = "体积云基础参数"; SortPriority = 30;
             Description = "背光边缘颜色";
             ParameterName = "消光颜色";
         ];
-        float AmbientOcclusion = 1.0 [
+        float _AmbientOcclusion = 1.0 [
             Group = "体积云基础参数"; SortPriority = 40;
             Description = "AO";
             ParameterName = "AO";
         ];
-        float Tile_Km = 10.0 [
+        float _Density = 1.0 [
+            Group = "体积云基础参数"; SortPriority = 45; Slider(0.01, 8);
+            Description = "云体密度乘数，控制云层整体不透明度";
+            ParameterName = "密度";
+        ];
+        // 体积云Debug
+        float _Tile_Km = 10.0 [
             Group = "体积云Debug"; SortPriority = 10; Slider(0.5, 8);
             Description = "天空坐标网格瓦片边长(km)，可视化每 TileKm km 一格";
             ParameterName = "网格瓦片(km)";
         ];
-        float PhaseG = 0.6 [
+        // 体积云高级参数
+        float _PhaseG = 0.6 [
             Group = "体积云高级参数"; SortPriority = 20; Slider(-1, 1);
             Description = "主相位函数不对称因子，正值使光向前散射（朝太阳方向）";
             ParameterName = "相位G";
         ];
-        float PhaseG2 = -0.4 [
+        float _PhaseG2 = -0.4 [
             Group = "体积云高级参数"; SortPriority = 30; Slider(-1, 1);
             Description = "第二相位函数不对称因子，用于更真实的光散射";
             ParameterName = "相位G2";
         ];
-        float PhaseBlend = 0.4 [
+        float _PhaseBlend = 0.25 [
             Group = "体积云高级参数"; SortPriority = 40; Slider(0, 1);
             Description = "两个相位函数之间的混合系数";
             ParameterName = "相位混合";
         ];
-        float MultiScatteringContribution = 1.0 [
+        float _MultiScatteringContribution = 1.0 [
             Group = "体积云高级参数"; SortPriority = 50; Slider(0, 2);
             Description = "多次散射近似贡献值，模拟光在云内多次反弹";
             ParameterName = "多次散射贡献";
         ];
-        float MultiScatteringOcclusion = 0.2 [
+        float _MultiScatteringOcclusion = 0.8 [
             Group = "体积云高级参数"; SortPriority = 60; Slider(0, 1);
             Description = "多次散射遮蔽系数，控制云内部自遮挡强度";
             ParameterName = "多次散射遮蔽";
         ];
-        float MultiScatteringEccentricity = 0.5 [
+        float _MultiScatteringEccentricity = 0.7 [
             Group = "体积云高级参数"; SortPriority = 70; Slider(-1, 1);
             Description = "多次散射偏心率，影响多次散射光的方向分布";
             ParameterName = "多次散射偏心率";
         ];
-        float ConservativeDensity = 1.0 [
+        float _ConservativeDensity = 1.0 [
             Group = "体积云高级参数"; SortPriority = 80; Slider(0, 1);
             Description = "保守密度阈值，低于此密度的区域视为无云";
             ParameterName = "保守密度";
+        ];
+        // 体积云形态参数
+        float _SphereRadius = 0.5 [
+            Group = "体积云形态参数"; SortPriority = 5; Slider(0.01, 1);
+            Description = "圆形半径，用于圆形云层的尺寸控制";
+            ParameterName = "圆形半径";
+        ];
+        Texture2D _CloudTexture = Path(Game, "Cloud/Texture/SphereRenderMask") [
+            Group = "体积云形态参数"; SortPriority = 10;
+            Description = "云体纹理";
+            ParameterName = "体积云贴图";
+        ];
+        float _UV_Scale = 1.0 [
+            Group = "体积云形态参数"; SortPriority = 15; Slider(0.01, 8);
+            Description = "体积云贴图的 UV 缩放";
+            ParameterName = "贴图UV缩放";
+        ];
+        CurveAtlasRowParameter _CloudAtlas = vec3(0.0, 0.0, 0.0) [
+            Group="体积云形态参数"; SortPriority = 19;
+            Description = "使用曲线控制圆柱体的上下密度"
+            ParameterName = "云形态曲线";
         ];
     }
 
@@ -90,14 +109,14 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
         // 告诉着色器，光如何被水滴散射
 
         // 终端输出节点：没有输出引脚，只能在 Outputs 块用 Expression(...).Pin[i] 喂入
-        float _PhaseG_Out;
-        float _PhaseG2_Out;
-        float _PhaseBlend_Out;
-        float _MultiScatteringContribution_Out;
-        float _MultiScatteringOcclusion_Out;
-        float _MultiScatteringEccentricity_Out;
+        float Out_PhaseG;
+        float Out_PhaseG2;
+        float Out_PhaseBlend;
+        float Out_MultiScatteringContribution;
+        float Out_MultiScatteringOcclusion;
+        float Out_MultiScatteringEccentricity;
         // 上面的云参数性能消耗都不大
-        float _ConservativeDensity_Out;
+        float Out_ConservativeDensity;
 
         // Pin 索引来自 material-expressions.json (UMaterialExpressionVolumetricAdvancedMaterialOutput):
         //   0=PhaseG, 1=PhaseG2, 2=PhaseBlend, 3=MultiScatteringContribution,
@@ -110,7 +129,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             bGrayScaleMaterial="false",
             bRayMarchVolumeShadow="true",
             bClampMultiScatteringContribution="true"
-        ).Pin[0] = _PhaseG_Out;           // 相位G
+        ).Pin[0] = Out_PhaseG;           // 相位G
         Expression(Class="VolumetricAdvancedMaterialOutput",
             PerSamplePhaseEvaluation="false",
             MultiScatteringApproximationOctaveCount=0,
@@ -118,7 +137,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             bGrayScaleMaterial="false",
             bRayMarchVolumeShadow="true",
             bClampMultiScatteringContribution="true"
-        ).Pin[1] = _PhaseG2_Out;          // 相位G2
+        ).Pin[1] = Out_PhaseG2;          // 相位G2
         Expression(Class="VolumetricAdvancedMaterialOutput",
             PerSamplePhaseEvaluation="false",
             MultiScatteringApproximationOctaveCount=0,
@@ -126,7 +145,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             bGrayScaleMaterial="false",
             bRayMarchVolumeShadow="true",
             bClampMultiScatteringContribution="true"
-        ).Pin[2] = _PhaseBlend_Out;       // 相位混合
+        ).Pin[2] = Out_PhaseBlend;       // 相位混合
         Expression(Class="VolumetricAdvancedMaterialOutput",
             PerSamplePhaseEvaluation="false",
             MultiScatteringApproximationOctaveCount=0,
@@ -134,7 +153,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             bGrayScaleMaterial="false",
             bRayMarchVolumeShadow="true",
             bClampMultiScatteringContribution="true"
-        ).Pin[3] = _MultiScatteringContribution_Out; // 多次散射贡献
+        ).Pin[3] = Out_MultiScatteringContribution; // 多次散射贡献
         Expression(Class="VolumetricAdvancedMaterialOutput",
             PerSamplePhaseEvaluation="false",
             MultiScatteringApproximationOctaveCount=0,
@@ -142,7 +161,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             bGrayScaleMaterial="false",
             bRayMarchVolumeShadow="true",
             bClampMultiScatteringContribution="true"
-        ).Pin[4] = _MultiScatteringOcclusion_Out;     // 多次散射遮蔽
+        ).Pin[4] = Out_MultiScatteringOcclusion;     // 多次散射遮蔽
         Expression(Class="VolumetricAdvancedMaterialOutput",
             PerSamplePhaseEvaluation="false",
             MultiScatteringApproximationOctaveCount=0,
@@ -150,7 +169,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             bGrayScaleMaterial="false",
             bRayMarchVolumeShadow="true",
             bClampMultiScatteringContribution="true"
-        ).Pin[5] = _MultiScatteringEccentricity_Out;  // 多次散射偏心率
+        ).Pin[5] = Out_MultiScatteringEccentricity;  // 多次散射偏心率
         Expression(Class="VolumetricAdvancedMaterialOutput",
             PerSamplePhaseEvaluation="false",
             MultiScatteringApproximationOctaveCount=0,
@@ -158,36 +177,52 @@ Shader(Name="Cloud/dsm/M_VolumeCloud")
             bGrayScaleMaterial="false",
             bRayMarchVolumeShadow="true",
             bClampMultiScatteringContribution="true"
-        ).Pin[6] = _ConservativeDensity_Out;           // 保守密度
+        ).Pin[6] = Out_ConservativeDensity;           // 保守密度
     }
 
     Graph = {
-        float2 WP_UV = UE.WorldPosition().xy;
-        WP_UV = WP_UV / (UV_Scale * 100000);
-        vec3 CloudTex = UE.TextureSample(OutputType="float3", Coordinates=WP_UV, TextureObject=CloudTexture);
-        
-        // 高级参数计算
-        _PhaseG_Out = PhaseG;
-        _PhaseG2_Out = PhaseG2;
-        _PhaseBlend_Out = PhaseBlend;
-        _MultiScatteringContribution_Out = MultiScatteringContribution;
-        _MultiScatteringOcclusion_Out = MultiScatteringOcclusion;
-        _MultiScatteringEccentricity_Out = MultiScatteringEccentricity;
-        _ConservativeDensity_Out = CloudTex.r;
+        // 高级参数
+        vec2 WP_UV = UE.WorldPosition().xy;
+        WP_UV = WP_UV / (_UV_Scale * 100000);
+        float CloudDensity = UE.TextureSample(OutputType="float3", Coordinates=WP_UV, TextureObject=_CloudTexture).r; // 使用贴图.r作为云的来源
+        CloudDensity = MkCircleSoft(WP_UV, _SphereRadius, _SphereRadius); // 使用自定义的圆形作为云姿态
 
-        // float Ext = UE.VolumetricAdvancedMaterialInput(OutputType="float");
-        float Ext = UE.ComponentMask(OutputType="float", Input=UE.VolumetricAdvancedMaterialInput(OutputType="float"), R=true, G=false, B=false);
+        // 曲线控制云密度
+        vec3 Curve = UE.CurveAtlasRowParameter(OutputType="float3", ParameterName = "体积云姿态曲线",
+            Atlas=Path(Game, "Cloud/Texture/Curves/Atlas_Cloud"), 
+            Curve=Path(Game, "Cloud/Texture/Curves/Curve_CloudExt"),
+            Group="体积云形态参数",
+            CurveTime=UE.CloudSampleAttribute(OutputType="float1", OutputName="NormAltitudeInLayer")
+        );
+        float CurveCloudDensity = Curve.r;
+        
+        // CloudDensity = CurveCloudDensity * CloudDensity;
+        CloudDensity = RemapValue_Normalized(CloudDensity, 1 - CurveCloudDensity, 1);
+
+        float Ext = UE.VolumetricAdvancedMaterialInput(OutputType="float").r;
+        Ext = Ext * TD_BiinearGradient() * _Density * 0.001;
 
         Substrate Surface = Substrate.VolumetricFogCloud(
-            Albedo=BaseColor, 
-            // Albedo=SkyCoordDebug(Tile_Km), // 天空坐标可视化：按 TileKm(km) 平铺的网格 RGB，接入基础色便于观察坐标分布（调试用，可替换为 BaseColor）
-            EmissiveColor=EmissiveColor, 
-            // Extinction=Extinction, 
+            Albedo=_BaseColor, 
+            // Albedo=SkyCoordDebug(_Tile_Km), // 天空坐标可视化：按 TileKm(km) 平铺的网格 RGB，接入基础色便于观察坐标分布（调试用，可替换为 _BaseColor）
+            EmissiveColor=_EmissiveColor, 
+            // Extinction=_Extinction, // 使用参数控制，1 就是全部显示
             Extinction=Ext, 
-            AmbientOcclusion=AmbientOcclusion
+            AmbientOcclusion=_AmbientOcclusion
         );
 
+        // 输出
         Base.FrontMaterial = Surface; // 输出
+
+        // 高级体积云参数输出
+        Out_PhaseG = _PhaseG;         // 相位G
+        Out_PhaseG2 = _PhaseG2;       // 相位G2
+        Out_PhaseBlend = _PhaseBlend; // 相位混合
+        Out_MultiScatteringContribution = _MultiScatteringContribution; // 多次散射贡献
+        Out_MultiScatteringOcclusion = _MultiScatteringOcclusion;       // 多次散射遮蔽
+        Out_MultiScatteringEccentricity = _MultiScatteringEccentricity; // 多次散射偏心率
+        // Out_ConservativeDensity = CloudDensity * _ConservativeDensity;
+        Out_ConservativeDensity = CloudDensity; // 保守密度
 
     }
 }
