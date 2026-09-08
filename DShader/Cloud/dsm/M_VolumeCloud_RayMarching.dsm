@@ -1,15 +1,14 @@
-// M_VolumeCloud_RayMarching.dsm -- 射线步进体积云材质（路线 B：真实 Custom 节点）。
-// 由 MF_Module_Volumetric_Cloud.ush 移植。立方体随相机跟随（WPO），对 3D 密度纹理做射线步进，
-// 含 Beer-Lambert 消光、解析云阴影、背光边缘光（Silver Lining）、天空环境光和时域抖动。
-// 用两个 UE.Expression(Class="Custom") 节点承载 .ush 原始 HLSL：Custom 节点代码里
-// Parameters/ResolvedView/GetPrimitiveData 等在作用域内，可编译、不卡引擎。
+// M_VolumeCloud_RayMarching.dsm -- 射线步进体积云材质。
+// 由 MF_Module_Volumetric_Cloud.ush 移植而来。立方体随相机跟随（WPO），
+// 对 3D 密度纹理做射线步进，包含 Beer-Lambert 消光、解析云阴影、
+// 背光边缘光（Silver Lining）、天空环境光和时域抖动。
 // 生成 /Game/Cloud/dsm/M_VolumeCloud_RayMarching（项目默认 ThinCustom 后端 -> 材质实例）。
 Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
 {
     Properties = {
         Texture3D CloudTex = Path(Game, "Cloud/Texture/Volume/T_Volume_VolumeCloud_03") [
             Group = "体积云"; SortPriority = 5;
-            Description = "3D 云密度贴图（采样 .r 作密度）";
+            Description = "3D 云密度贴图（采样较红通道 .r 作密度）";
             ParameterName = "云纹理";
         ];
         vec3 CloudColor = vec3(0.8, 0.8, 0.8) [
@@ -82,153 +81,198 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
         float Opacity;
         vec3  WPO;
 
-        Base.EmissiveColor       = Emissive;
-        Base.Opacity             = Opacity;
-        Base.OpacityMask         = Opacity;
+        Base.EmissiveColor     = Emissive;
+        Base.Opacity           = Opacity;
+        Base.OpacityMask       = Opacity;
         Base.WorldPositionOffset = WPO;
     }
 
     Graph = {
-        float4 RM = UE.Expression(Class = "Custom", OutputType = "float4",
-            Code = "{
-                float3 BMin  = GetPrimitiveData(Parameters).LocalObjectBoundsMin;
-                float3 BMax  = GetPrimitiveData(Parameters).LocalObjectBoundsMax;
-                float3 BSize = max(BMax - BMin, 0.001);
+        float4 RM = CloudRayMarch(
+            CloudTex, CloudColor, CloudOpacityStrength, CloudSteps,
+            CloudShadowSteps, CloudShadowRange, CloudShadowOffset,
+            CloudShadowStrength, CloudSilverLining, CloudSilverLiningBackPower,
+            CloudDitherScale, CloudAmbient);
 
-                // 相机 -> primitive -> UVW（含参考所用的 Rx(90°) Y 轴向上补偿）
-                float3 CamLocal = DFFastMultiplyDemote(ResolvedView.WorldCameraOrigin, GetPrimitiveData(Parameters).WorldToLocal).xyz;
-                float3 CamUVW = (CamLocal - BMin) / BSize;
-                CamUVW = float3(CamUVW.x, 1.0 - CamUVW.z, CamUVW.y);
-
-                // 世界空间视线方向，由像素重建（不依赖表面位置）
-                float4 Sv = Parameters.SvPosition;
-                float3 RayDirWorld = normalize(SvPositionToTranslatedWorld(float4(Sv.xy, 1.0, Sv.w)) - ResolvedView.TranslatedWorldCameraOrigin);
-
-                float3x3 W2L3 = DFToFloat3x3(GetPrimitiveData(Parameters).WorldToLocal);
-                float3 ViewDirLocal = mul(RayDirWorld, W2L3);
-                float3 ViewDir = normalize(float3(ViewDirLocal.x / BSize.x, -ViewDirLocal.z / BSize.y, ViewDirLocal.y / BSize.z));
-
-                float3 ToLight = normalize(ResolvedView.DirectionalLightDirection);
-                ToLight = mul(ToLight, W2L3);
-                ToLight = normalize(float3(ToLight.x / BSize.x, -ToLight.z / BSize.y, ToLight.y / BSize.z));
-
-                // AABB（射线与单位立方体求交）
-                float3 InvD = 1.0 / (ViewDir + 0.00001);
-                float3 t0   = -CamUVW * InvD;
-                float3 t1   = (1.0 - CamUVW) * InvD;
-                float3 tN   = min(t0, t1);
-                float3 tF   = max(t0, t1);
-                float tEntry = max(max(max(tN.x, tN.y), tN.z), 0.0);
-                float tExit  = min(min(tF.x, tF.y), tF.z);
-
-                float4 RESULT = float4(0, 0, 0, 0);
-                if (tExit > tEntry) {
-                    // 遮挡体：沿本像素射线的场景深度，换算到 primitive 空间
-                    float SceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(Parameters)));
-                    float RayDist = SceneDepth / max(dot(RayDirWorld, ResolvedView.ViewForward), 0.0001);
-                    float3 OccLocal = CamLocal + mul(RayDirWorld * RayDist, W2L3);
-                    float3 OccUVW = (OccLocal - BMin) / BSize;
-                    OccUVW = float3(OccUVW.x, 1.0 - OccUVW.z, OccUVW.y);
-                    float tOcc = dot(OccUVW - CamUVW, ViewDir);
-
-                    float3 Entry = clamp(CamUVW + ViewDir * tEntry, 0.001, 0.999);
-                    float3 Exit  = clamp(CamUVW + ViewDir * tExit,  0.001, 0.999);
-                    float3 RStep = (Exit - Entry) / max(CloudSteps, 16.0);
-                    float tStep  = (tExit - tEntry) / max(CloudSteps, 16.0);
-
-                    // 时域抖动（interleaved gradient noise）
-                    float2 dn = Parameters.SvPosition.xy + ResolvedView.StateFrameIndexMod8 * (float2(47.0, 17.0) * 0.695);
-                    float Dither = frac(52.9829189 * frac(dot(dn, float2(0.06711056, 0.00583715))));
-
-                    float tCur = tEntry;
-                    Entry += RStep * (Dither - 0.5) * max(CloudDitherScale, 0.0);
-                    Entry = clamp(Entry, 0.001, 0.999);
-                    tCur += (Dither - 0.5) * max(CloudDitherScale, 0.0) * tStep;
-
-                    float StepLen = length(RStep);
-                    int ShSteps = max((int)CloudShadowSteps, 2);
-                    float3 ShStep = ToLight * CloudShadowRange / (float)ShSteps;
-
-                    float3 LCol = max(ResolvedView.DirectionalLightColor.rgb, float3(0, 0, 0));
-                    float CosT = clamp(dot(ViewDir, ToLight), -0.999, 0.999);
-                    float BackLit = pow(saturate(CosT), max(CloudSilverLiningBackPower, 0.5));
-                    float3 SkyAmbient = max(CloudAmbient * ResolvedView.SkyLightColor.rgb, float3(0, 0, 0));
-
-                    float3 Cur = Entry;
-                    float3 Col = float3(0, 0, 0);
-                    float Tr = 1.0;
-                    [loop]
-                    for (int i = 0; i < (int)CloudSteps; i++) {
-                        Cur = clamp(Cur, 0.001, 0.999);
-                        float4 Samp = Texture3DSample(CloudTex, CloudTexSampler, Cur);
-                        float Den = saturate(Samp.r);
-                        if (tCur <= tOcc && Den >= 0.02 && Tr > 0.003) {
-                            float Sigma = Den * CloudOpacityStrength;
-                            float StepTr = exp(-Sigma * StepLen);
-                            float Shadow = 1.0;
-                            {
-                                float SAcc = 0.0;
-                                [loop]
-                                for (int s = 0; s < ShSteps; s++) {
-                                    float3 Sc = clamp(Cur + ShStep * ((float)(s + 1) + CloudShadowOffset), 0.001, 0.999);
-                                    float SRaw = saturate(Texture3DSample(CloudTex, CloudTexSampler, Sc).r);
-                                    if (SRaw >= 0.02) SAcc += SRaw;
-                                }
-                                Shadow = exp(-SAcc * CloudShadowStrength / (float)ShSteps);
-                            }
-                            float3 Direct = LCol * Shadow;
-                            float EdgeMask = Den * (1.0 - Den) * 4.0;
-                            Direct += LCol * EdgeMask * BackLit * Shadow * CloudSilverLining;
-                            float AltFade = lerp(1.0, 0.1, saturate(Cur.y));
-                            float3 Ambient = SkyAmbient * AltFade;
-                            float3 Lighting = Direct + Ambient;
-                            Col += Tr * (1.0 - StepTr) * Lighting;
-                            Tr *= StepTr;
-                        }
-                        Cur += RStep;
-                        tCur += tStep;
-                    }
-                    RESULT = float4(Col * CloudColor.rgb, 1.0 - Tr);
-                }
-                return RESULT;
-            }",
-            CloudTex = CloudTex, 
-            CloudColor = CloudColor,
-            CloudOpacityStrength = CloudOpacityStrength, 
-            CloudSteps = CloudSteps,
-            CloudShadowSteps = CloudShadowSteps, 
-            CloudShadowRange = CloudShadowRange,
-            CloudShadowOffset = CloudShadowOffset, 
-            CloudShadowStrength = CloudShadowStrength,
-            CloudSilverLining = CloudSilverLining, 
-            CloudSilverLiningBackPower = CloudSilverLiningBackPower,
-            CloudDitherScale = CloudDitherScale, 
-            CloudAmbient = CloudAmbient
-        );
-
-        vec3  WPO = UE.Expression(Class = "Custom", OutputType = "float3",
-            Code = "{
-                float3 BMin = GetPrimitiveData(Parameters).LocalObjectBoundsMin;
-                float3 BMax = GetPrimitiveData(Parameters).LocalObjectBoundsMax;
-                float3 BCenter = (BMin + BMax) * 0.5;
-                float3 BSX = max(BMax - BMin, 0.001);
-                float3 VLocal = GetPositionPrimitiveSpace(Parameters);
-                // 相机转 primitive 空间
-                float3 CamLocal = DFFastMultiplyDemote(ResolvedView.WorldCameraOrigin, GetPrimitiveData(Parameters).WorldToLocal).xyz;
-                float Snap = BSX.x * 0.5;
-                float Inside = 0.0;
-                if (CamLocal.x > BMin.x - Snap && CamLocal.x < BMax.x + Snap) {
-                    if (CamLocal.y > BMin.y - Snap && CamLocal.y < BMax.y + Snap) {
-                        if (CamLocal.z > BMin.z - Snap && CamLocal.z < BMax.z + Snap) {
-                            Inside = 1.0;
-                        }
-                    }
-                }
-                float3 LocalDelta = (CamLocal - BCenter) * Inside;
-                return mul(GetLocalToWorld3x3(Parameters), LocalDelta);
-            }");
-
+        WPO      = CloudWPO();
         Emissive = RM.rgb;
         Opacity  = RM.a;
+    }
+}
+
+// WPO：当相机进入立方体（带吸附余量）时，移动立方体使其中心落在相机上。
+// 输出为 translated world 空间。完全在 primitive（local）空间内计算，以缩短 LWC 数学；
+// 只有最终的局部位移再经 LocalToWorld 3x3 旋转/缩放回世界空间。
+GraphFunction CloudWPO(out float3 WPO)
+{
+    float3 BMin = GetPrimitiveData(Parameters).LocalObjectBoundsMin;
+    float3 BMax = GetPrimitiveData(Parameters).LocalObjectBoundsMax;
+    float3 BCenter = (BMin + BMax) * 0.5;
+    float3 BSX = max(BMax - BMin, 0.001);
+
+    float3 VLocal = GetPositionPrimitiveSpace(Parameters);
+
+    // 相机转 primitive 空间 -- 与 GetPositionPrimitiveSpace 一致，其内部做
+    // DFFastMultiplyDemote(Parameters.AbsoluteWorldPosition, WorldToLocal)
+    float3 CamLocal =
+        DFFastMultiplyDemote(ResolvedView.WorldCameraOrigin, GetPrimitiveData(Parameters).WorldToLocal).xyz;
+
+    float Snap = BSX.x * 0.5;
+    float Inside = 0.0;
+    if (CamLocal.x > BMin.x - Snap && CamLocal.x < BMax.x + Snap) {
+        if (CamLocal.y > BMin.y - Snap && CamLocal.y < BMax.y + Snap) {
+            if (CamLocal.z > BMin.z - Snap && CamLocal.z < BMax.z + Snap) {
+                Inside = 1.0;
+            }
+        }
+    }
+
+    float3 LocalDelta = (CamLocal - BCenter) * Inside;
+    WPO = mul(GetLocalToWorld3x3(Parameters), LocalDelta);
+}
+
+// 像素射线步进。返回预乘颜色 + 不透明度。
+GraphFunction CloudRayMarch(
+    in Texture3D CloudTex,
+    in float3 CloudColor,
+    in float CloudOpacityStrength,
+    in float CloudSteps,
+    in float CloudShadowSteps,
+    in float CloudShadowRange,
+    in float CloudShadowOffset,
+    in float CloudShadowStrength,
+    in float CloudSilverLining,
+    in float CloudSilverLiningBackPower,
+    in float CloudDitherScale,
+    in float3 CloudAmbient,
+    out float4 RM)
+{
+    float3 BMin = GetPrimitiveData(Parameters).LocalObjectBoundsMin;
+    float3 BMax = GetPrimitiveData(Parameters).LocalObjectBoundsMax;
+    float3 BSize = max(BMax - BMin, 0.001);
+
+    // 相机 -> primitive -> UVW（含参考所用的 Rx(90°) Y 轴向上补偿）
+    float3 CamLocal =
+        DFFastMultiplyDemote(ResolvedView.WorldCameraOrigin, GetPrimitiveData(Parameters).WorldToLocal).xyz;
+    float3 CamUVW = (CamLocal - BMin) / BSize;
+    CamUVW = float3(CamUVW.x, 1.0 - CamUVW.z, CamUVW.y);
+
+    // 世界空间视线方向，由像素重建（不依赖表面位置）。
+    float4 Sv = Parameters.SvPosition;
+    float3 RayDirWorld = normalize(
+        SvPositionToTranslatedWorld(float4(Sv.xy, 1.0, Sv.w))
+        - ResolvedView.TranslatedWorldCameraOrigin);
+
+    float3x3 W2L3 = DFToFloat3x3(GetPrimitiveData(Parameters).WorldToLocal);
+
+    float3 ViewDirLocal = mul(RayDirWorld, W2L3);
+    float3 ViewDir = ViewDirLocal / BSize;
+    ViewDir = float3(ViewDir.x, -ViewDir.z, ViewDir.y);
+    ViewDir = normalize(ViewDir);
+
+    float3 ToLight = normalize(ResolvedView.DirectionalLightDirection);
+    ToLight = mul(ToLight, W2L3);
+    ToLight = ToLight / BSize;
+    ToLight = float3(ToLight.x, -ToLight.z, ToLight.y);
+    ToLight = normalize(ToLight);
+
+    // AABB（射线与单位立方体求交）
+    float3 InvD = 1.0 / (ViewDir + 0.00001);
+    float3 t0 = -CamUVW * InvD;
+    float3 t1 = (1.0 - CamUVW) * InvD;
+    float3 tN = min(t0, t1);
+    float3 tF = max(t0, t1);
+    float tEntry = max(max(max(tN.x, tN.y), tN.z), 0.0);
+    float tExit  = min(min(tF.x, tF.y), tF.z);
+
+    RM = float4(0, 0, 0, 0);
+
+    if (tExit > tEntry) {
+        // 遮挡体：沿本像素射线的场景深度，换算到 primitive 空间。
+        float SceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(Parameters)));
+        float RayDist = SceneDepth / max(dot(RayDirWorld, ResolvedView.ViewForward), 0.0001);
+        // 遮挡体 local = 相机 local + （世界射线位移 -> local，经 3x3 线性部分）
+        float3 OccLocal = CamLocal + mul(RayDirWorld * RayDist, W2L3);
+        float3 OccUVW = (OccLocal - BMin) / BSize;
+        OccUVW = float3(OccUVW.x, 1.0 - OccUVW.z, OccUVW.y);
+        float tOcc = dot(OccUVW - CamUVW, ViewDir);
+
+        float3 Entry = clamp(CamUVW + ViewDir * tEntry, 0.001, 0.999);
+        float3 Exit  = clamp(CamUVW + ViewDir * tExit,  0.001, 0.999);
+        float3 RStep = (Exit - Entry) / max(CloudSteps, 16.0);
+        float tStep  = (tExit - tEntry) / max(CloudSteps, 16.0);
+
+        // 时域抖动（interleaved gradient noise），内联以不依赖 IGN 头文件
+        // 是否在材质编译链中。
+        float2 dn = Parameters.SvPosition.xy + ResolvedView.StateFrameIndexMod8 * (float2(47.0, 17.0) * 0.695);
+        float Dither = frac(52.9829189 * frac(dot(dn, float2(0.06711056, 0.00583715))));
+
+        float tCur = tEntry;
+        Entry += RStep * (Dither - 0.5) * max(CloudDitherScale, 0.0);
+        Entry = clamp(Entry, 0.001, 0.999);
+        tCur += (Dither - 0.5) * max(CloudDitherScale, 0.0) * tStep;
+
+        float StepLen = length(RStep);
+
+        int ShSteps = max((int)CloudShadowSteps, 2);
+        float3 ShStep = ToLight * CloudShadowRange / (float)ShSteps;
+
+        float3 LCol = max(ResolvedView.DirectionalLightColor.rgb, float3(0, 0, 0));
+        float CosT = clamp(dot(ViewDir, ToLight), -0.999, 0.999);
+        float BackLit = pow(saturate(CosT), max(CloudSilverLiningBackPower, 0.5));
+
+        // 天空环境光：参考使用 View.SkyIrradianceEnvironmentMap，但该字段不在
+        // 材质编译链中；改用 SkyLightColor * 一个经过调校的兜底颜色。
+        float3 SkyAmbient = max(CloudAmbient * ResolvedView.SkyLightColor.rgb, float3(0, 0, 0));
+
+        float3 Cur = Entry;
+        float3 Col = float3(0, 0, 0);
+        float Tr = 1.0;
+
+        [loop]
+        for (int i = 0; i < (int)CloudSteps; i++)
+        {
+            Cur = clamp(Cur, 0.001, 0.999);
+
+            float4 Samp = Texture3DSample(CloudTex, CloudTexSampler, Cur);
+            float Den = saturate(Samp.r);
+
+            if (tCur <= tOcc && Den >= 0.02 && Tr > 0.003)
+            {
+                float Sigma = Den * CloudOpacityStrength;
+                float StepTr = exp(-Sigma * StepLen);
+
+                float Shadow = 1.0;
+                {
+                    float SAcc = 0.0;
+                    [loop]
+                    for (int s = 0; s < ShSteps; s++)
+                    {
+                        float3 Sc = clamp(Cur + ShStep * ((float)(s + 1) + CloudShadowOffset), 0.001, 0.999);
+                        float SRaw = saturate(Texture3DSample(CloudTex, CloudTexSampler, Sc).r);
+                        if (SRaw >= 0.02) {
+                            SAcc += SRaw;
+                        }
+                    }
+                    Shadow = exp(-SAcc * CloudShadowStrength / (float)ShSteps);
+                }
+
+                float3 Direct = LCol * Shadow;
+                float EdgeMask = Den * (1.0 - Den) * 4.0;
+                Direct += LCol * EdgeMask * BackLit * Shadow * CloudSilverLining;
+
+                float AltFade = lerp(1.0, 0.1, saturate(Cur.y));
+                float3 Ambient = SkyAmbient * AltFade;
+
+                float3 Lighting = Direct + Ambient;
+                Col += Tr * (1.0 - StepTr) * Lighting;
+                Tr *= StepTr;
+            }
+
+            Cur += RStep;
+            tCur += tStep;
+        }
+
+        RM = float4(Col * CloudColor.rgb, 1.0 - Tr);
     }
 }
