@@ -66,6 +66,11 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
             Description = "天空环境光兜底颜色";
             ParameterName = "环境光颜色";
         ];
+        float CloudBoundaryFade = 0.08 [
+            Group = "体积云"; SortPriority = 115; Slider(0, 0.5);
+            Description = "包围盒边界淡出宽度（UVW单位）。防止盒子面把云硬切断成白色轮廓；值越大边缘越柔和";
+            ParameterName = "边界淡出宽度";
+        ];
     }
 
     Settings = {
@@ -92,7 +97,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
             CloudTex, CloudColor, CloudOpacityStrength, CloudSteps,
             CloudShadowSteps, CloudShadowRange, CloudShadowOffset,
             CloudShadowStrength, CloudSilverLining, CloudSilverLiningBackPower,
-            CloudDitherScale, CloudAmbient);
+            CloudDitherScale, CloudAmbient, CloudBoundaryFade);
 
         WPO      = CloudWPO();
         Emissive = RM.rgb;
@@ -145,6 +150,7 @@ GraphFunction CloudRayMarch(
     in float CloudSilverLiningBackPower,
     in float CloudDitherScale,
     in float3 CloudAmbient,
+    in float CloudBoundaryFade,
     out float4 RM)
 {
     float3 BMin = GetPrimitiveData(Parameters).LocalObjectBoundsMin;
@@ -236,6 +242,11 @@ GraphFunction CloudRayMarch(
 
             float4 Samp = Texture3DSample(CloudTex, CloudTexSampler, Cur);
             float Den = saturate(Samp.r);
+
+            // 边界淡出：沿射线到最近盒面（UVW 空间 [0,1]）的距离线性衰减密度。
+            // 没有这层衰减时，盒子面处密度仍非零，云被盒子硬切断成白色轮廓。
+            float FadeDist = min(min(min(Cur.x, 1.0 - Cur.x), min(Cur.y, 1.0 - Cur.y)), min(Cur.z, 1.0 - Cur.z));
+            Den *= saturate(FadeDist / max(CloudBoundaryFade, 0.0001));
 
             if (tCur <= tOcc && Den >= 0.02 && Tr > 0.003)
             {
