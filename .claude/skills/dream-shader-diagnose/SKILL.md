@@ -2,12 +2,13 @@
 name: dream-shader-diagnose
 description: Resolve a DreamShader compile error or warning — look the message up by pipeline stage, explain the cause, and fix the source. Use when a .dsm / .dsf fails to build, when a LogDreamShader error needs explaining, or when a DreamShader material silently comes out wrong.
 ---
+<!-- Published from Plugins/DreamShader/.skill by sync-skills.ps1. Edit the source, not this copy. -->
 
 # dream-shader-diagnose `<message>`
 
 Turn a `LogDreamShader` message into a fix. Every message the parser, generator, commandlet and
 VirtualFunction sync can emit is catalogued in
-[`Docs/diagnostics/index.md`](../../Docs/diagnostics/index.md) — 1000 lines, grouped by the stage
+[`Docs/diagnostics/index.md`](../../../Plugins/DreamShader/Docs/diagnostics/index.md) — 1000 lines, grouped by the stage
 that produced it. This skill is the routing table into it.
 
 Paths below are relative to the plugin root, `Plugins/DreamShader/`.
@@ -27,20 +28,20 @@ pwsh -File Plugins/DreamShader/.skill/dsc.ps1 compile DShader/Materials/M_Sample
 ```
 
 **2 — Route by stage.** Jump to the section of
-[`Docs/diagnostics/index.md`](../../Docs/diagnostics/index.md) that owns it:
+[`Docs/diagnostics/index.md`](../../../Plugins/DreamShader/Docs/diagnostics/index.md) that owns it:
 
 | Message shape | Section | Deep reference |
 | :-- | :-- | :-- |
-| tokens, block structure, unterminated anything | **Parse** | [`Docs/language/lexical.md`](../../Docs/language/lexical.md) |
-| a `Properties` / `Inputs` / `Outputs` / `Settings` entry | **Sections and declarations** | [`Docs/language/index.md`](../../Docs/language/index.md) |
-| `Failed to evaluate Graph assignment for 'x'`, `Unknown Graph identifier`, type mismatches | **Graph statements and expressions** | [`Docs/graph/index.md`](../../Docs/graph/index.md) |
-| `Math function '…' expects…`, `Unknown Graph function`, `UE.*`, `Substrate.*` | **Builtins** | [`Docs/builtins/math.md`](../../Docs/builtins/math.md), [`ue.md`](../../Docs/builtins/ue.md) |
-| `DreamShader Function '…' input '…' uses unsupported type`, generated `.ush` failures | **Functions and HLSL codegen** | [`Docs/language/function.md`](../../Docs/language/function.md) |
-| `Unsupported property type`, parameter nodes, sampler types | **Properties and parameters** | [`Docs/parameters/index.md`](../../Docs/parameters/index.md) |
-| a `Settings` key or enum string | **Settings** | [`Docs/settings/material-enums.md`](../../Docs/settings/material-enums.md) |
-| `Generated …`, `Skipped …`, save/package failures | **Asset generation and saving** | [`Docs/generation/index.md`](../../Docs/generation/index.md) |
-| the usage banner, `Unknown DreamShader command` | **Commandlet** | [`Docs/tools/commandlet.md`](../../Docs/tools/commandlet.md) |
-| `VirtualFunction` drift against a real asset | **VirtualFunction sync** | [`Docs/language/virtual-function.md`](../../Docs/language/virtual-function.md) |
+| tokens, block structure, unterminated anything | **Parse** | [`Docs/language/lexical.md`](../../../Plugins/DreamShader/Docs/language/lexical.md) |
+| a `Properties` / `Inputs` / `Outputs` / `Settings` entry | **Sections and declarations** | [`Docs/language/index.md`](../../../Plugins/DreamShader/Docs/language/index.md) |
+| `Failed to evaluate Graph assignment for 'x'`, `Unknown Graph identifier`, type mismatches | **Graph statements and expressions** | [`Docs/graph/index.md`](../../../Plugins/DreamShader/Docs/graph/index.md) |
+| `Math function '…' expects…`, `Unknown Graph function`, `UE.*`, `Substrate.*` | **Builtins** | [`Docs/builtins/math.md`](../../../Plugins/DreamShader/Docs/builtins/math.md), [`ue.md`](../../../Plugins/DreamShader/Docs/builtins/ue.md) |
+| `DreamShader Function '…' input '…' uses unsupported type`, generated `.ush` failures | **Functions and HLSL codegen** | [`Docs/language/function.md`](../../../Plugins/DreamShader/Docs/language/function.md) |
+| `Unsupported property type`, parameter nodes, sampler types | **Properties and parameters** | [`Docs/parameters/index.md`](../../../Plugins/DreamShader/Docs/parameters/index.md) |
+| a `Settings` key or enum string | **Settings** | [`Docs/settings/material-enums.md`](../../../Plugins/DreamShader/Docs/settings/material-enums.md) |
+| `Generated …`, `Skipped …`, save/package failures | **Asset generation and saving** | [`Docs/generation/index.md`](../../../Plugins/DreamShader/Docs/generation/index.md) |
+| the usage banner, `Unknown DreamShader command` | **Commandlet** | [`Docs/tools/commandlet.md`](../../../Plugins/DreamShader/Docs/tools/commandlet.md) |
+| `VirtualFunction` drift against a real asset | **VirtualFunction sync** | [`Docs/language/virtual-function.md`](../../../Plugins/DreamShader/Docs/language/virtual-function.md) |
 
 **3 — Fix the source, recompile, confirm exit `0`.** Then check the message is gone rather than
 replaced: a compile stops at the **first** failing `Graph` statement, so fixing one error routinely
@@ -49,7 +50,7 @@ reveals the next.
 ## When there is no message
 
 The hardest DreamShader failures are the silent ones. Read
-[`Docs/diagnostics/index.md` § Silent behaviour](../../Docs/diagnostics/index.md) first — that
+[`Docs/diagnostics/index.md` § Silent behaviour](../../../Plugins/DreamShader/Docs/diagnostics/index.md) first — that
 section exists precisely for this. The recurring causes:
 
 | Symptom | Cause |
@@ -90,6 +91,6 @@ severity paints every DreamShader entry red.
 
 ## See also
 
-- [`Docs/diagnostics/index.md`](../../Docs/diagnostics/index.md) — the full catalogue
-- [`Docs/tools/bridge.md`](../../Docs/tools/bridge.md) — how the extensions receive diagnostics
+- [`Docs/diagnostics/index.md`](../../../Plugins/DreamShader/Docs/diagnostics/index.md) — the full catalogue
+- [`Docs/tools/bridge.md`](../../../Plugins/DreamShader/Docs/tools/bridge.md) — how the extensions receive diagnostics
 - [`dream-shader-verify`](../dream-shader-verify/SKILL.md) — reproducing the failure headlessly

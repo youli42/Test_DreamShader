@@ -2,6 +2,7 @@
 name: dream-shader-optimize
 description: Clean up a decompiled DreamShaderLang source — deduplicate repeated subexpressions, rename machine-generated variables, retarget the asset path, and restore state the decompiler drops — then recompile to prove the result still builds. Use when asked to optimize, clean up, tidy, refactor, or make readable a .dsm / .dsf produced by the DreamShader decompiler.
 ---
+<!-- Published from Plugins/DreamShader/.skill by sync-skills.ps1. Edit the source, not this copy. -->
 
 # dream-shader-optimize `<file>`
 
@@ -53,7 +54,7 @@ Shader(Name="DreamShaderSkillProbe/M_SkillProbe")                            // 
 
 Only do this once the source is trusted; it is the step that makes the source authoritative.
 `Root="Plugin.LGUI"` targets a content plugin — see
-[`Docs/generation/asset-paths.md`](../../Docs/generation/asset-paths.md).
+[`Docs/generation/asset-paths.md`](../../../Plugins/DreamShader/Docs/generation/asset-paths.md).
 
 ### 4.2 Hoist duplicated subexpressions
 
@@ -87,7 +88,7 @@ readable, and does not depend on a class-name string:
 | `UE.Expression(Class="VertexColor", OutputType="float4")` | `UE.VertexColor()` |
 | `UE.Expression(Class="ScreenPosition", …)` | `UE.ScreenPosition()` |
 
-Check [`Docs/builtins/ue.md`](../../Docs/builtins/ue.md) before assuming a wrapper exists — keep
+Check [`Docs/builtins/ue.md`](../../../Plugins/DreamShader/Docs/builtins/ue.md) before assuming a wrapper exists — keep
 `UE.Expression` when it does not. Mind the arguments: `UE.Expression(Class="TextureCoordinate")`
 with no `CoordinateIndex` means index 0, so `UE.TexCoord(Index=0)` is the equivalent, not
 `UE.TexCoord()` with some other default.
@@ -123,8 +124,8 @@ and list what you could not confirm.
 | Lost | Where it belongs |
 | :-- | :-- |
 | `Backend` | `Settings` — the exporter never writes it, so the file rebuilds on the default backend. Add `Backend = "Graph";` if the graph must stay editable |
-| `UMaterial` properties outside the blessed set — `OpacityMaskClipValue`, `NumCustomizedUVs`, translucency lighting mode, displacement, Nanite override | `Settings`; they resolve by reflection. [`Docs/settings/material.md`](../../Docs/settings/material.md) |
-| Material-function settings — `Description`, `ExposeToLibrary`, `LibraryCategories`, `UserExposedCaption` | a `Settings` block in the `.dsf`. [`Docs/settings/function.md`](../../Docs/settings/function.md) |
+| `UMaterial` properties outside the blessed set — `OpacityMaskClipValue`, `NumCustomizedUVs`, translucency lighting mode, displacement, Nanite override | `Settings`; they resolve by reflection. [`Docs/settings/material.md`](../../../Plugins/DreamShader/Docs/settings/material.md) |
+| Material-function settings — `Description`, `ExposeToLibrary`, `LibraryCategories`, `UserExposedCaption` | a `Settings` block in the `.dsf`. [`Docs/settings/function.md`](../../../Plugins/DreamShader/Docs/settings/function.md) |
 | **Struct-, array-, map- and set-valued node properties** | dropped **silently** from a fallback `UE.Expression`, with no per-property warning. Re-add the argument, or set it on the asset after generation |
 | Node comment text (`Desc`) and pin `SortPriority` | re-apply by hand |
 
@@ -159,7 +160,7 @@ fails to compile, the pass was wrong.**
 ## Known round-trip gaps you cannot fix in the source
 
 Read these before promising a clean migration — full table in
-[`Docs/tools/decompiler.md`](../../Docs/tools/decompiler.md#known-round-trip-gaps).
+[`Docs/tools/decompiler.md`](../../../Plugins/DreamShader/Docs/tools/decompiler.md#known-round-trip-gaps).
 
 - A `MaterialFunctionCall` **with no assigned function becomes `0.0`** — the branch is silently
   constant-folded. Re-assign it in the original asset and re-export.

@@ -2,6 +2,7 @@
 name: dream-shader-create
 description: Write a new DreamShaderLang material or material function from a plain-language description, then compile it headlessly to prove it builds. Use when asked to create, author, add, or write a .dsm / .dsf / DreamShader material, shader, or material function for an Unreal project.
 ---
+<!-- Published from Plugins/DreamShader/.skill by sync-skills.ps1. Edit the source, not this copy. -->
 
 # dream-shader-create `<description>`
 
@@ -24,7 +25,7 @@ function name fails at step 3.
 | Material, or reusable function? | `.dsm` holds one `Shader`; `.dsf` holds `ShaderFunction`/`ShaderLayer`/`ShaderLayerBlend`; `.dsh` holds helpers only |
 | Where does the asset land? | `Shader(Name="UI/M_Panel")` → `/Game/UI/M_Panel`. `Root="Plugin.X"` for a content plugin |
 | Node graph, or one HLSL node? | `Settings { Backend = "Graph"; }` for a graph an artist can open; omit for the default thin-custom material |
-| Which surface? | `Domain` `ShadingModel` `BlendMode` — see [`Docs/settings/material-enums.md`](../../Docs/settings/material-enums.md) |
+| Which surface? | `Domain` `ShadingModel` `BlendMode` — see [`Docs/settings/material-enums.md`](../../../Plugins/DreamShader/Docs/settings/material-enums.md) |
 
 Write it under the project's `DShader/` tree — `DShader/Materials/` for `.dsm`,
 `DShader/Functions/` for `.dsf`, `DShader/Shared/` for `.dsh`.
@@ -151,4 +152,4 @@ dsc: OK (exit 0)
 - [`dream-shader-verify`](../dream-shader-verify/SKILL.md) — the compile gate, and `-All`
 - [`dream-shader-optimize`](../dream-shader-optimize/SKILL.md) — cleaning up decompiler output
 - [`dream-shader-diagnose`](../dream-shader-diagnose/SKILL.md) — resolving a message
-- [`Docs/examples/index.md`](../../Docs/examples/index.md) — complete sources to copy
+- [`Docs/examples/index.md`](../../../Plugins/DreamShader/Docs/examples/index.md) — complete sources to copy

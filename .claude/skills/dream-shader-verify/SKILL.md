@@ -2,6 +2,7 @@
 name: dream-shader-verify
 description: Compile DreamShaderLang sources headlessly to check they build — one file or the whole DShader tree — without opening the Unreal editor. Use when asked to verify, validate, build, compile, test, or CI-gate .dsm / .dsf / DreamShader sources, or to check whether a material still generates.
 ---
+<!-- Published from Plugins/DreamShader/.skill by sync-skills.ps1. Edit the source, not this copy. -->
 
 # dream-shader-verify `<file>` | `-All`
 
@@ -134,7 +135,7 @@ whether the new bytes should be kept.
 
 ## See also
 
-- [`Docs/tools/commandlet.md`](../../Docs/tools/commandlet.md) — the full flag surface behind the driver
-- [`Docs/generation/in-memory.md`](../../Docs/generation/in-memory.md) — why the editor does not write assets
-- [`Docs/generation/caching.md`](../../Docs/generation/caching.md) — the hash skip `-Force` bypasses
+- [`Docs/tools/commandlet.md`](../../../Plugins/DreamShader/Docs/tools/commandlet.md) — the full flag surface behind the driver
+- [`Docs/generation/in-memory.md`](../../../Plugins/DreamShader/Docs/generation/in-memory.md) — why the editor does not write assets
+- [`Docs/generation/caching.md`](../../../Plugins/DreamShader/Docs/generation/caching.md) — the hash skip `-Force` bypasses
 - [`dream-shader-diagnose`](../dream-shader-diagnose/SKILL.md) — resolving a message

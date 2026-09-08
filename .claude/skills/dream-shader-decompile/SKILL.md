@@ -2,6 +2,7 @@
 name: dream-shader-decompile
 description: Export an existing Unreal UMaterial or UMaterialFunction back into DreamShaderLang source headlessly, so a hand-built material graph can be migrated to a text source file. Use when asked to decompile, export, reverse, convert, or migrate a material / material function / material layer asset to .dsm or .dsf.
 ---
+<!-- Published from Plugins/DreamShader/.skill by sync-skills.ps1. Edit the source, not this copy. -->
 
 # dream-shader-decompile `<asset>`
 
@@ -57,7 +58,7 @@ So `/Game/Materials/Metal/M_Steel` → `DShader/Decompiled/Materials/Game/Materi
 - **This is a migration starting point, not a round-trip guarantee.** The exporter reproduces the
   graph's structure and the node state it can express, and leaves a `// Warning:` comment for the
   rest. Read
-  [`Docs/tools/decompiler.md`](../../Docs/tools/decompiler.md#known-round-trip-gaps) before deleting
+  [`Docs/tools/decompiler.md`](../../../Plugins/DreamShader/Docs/tools/decompiler.md#known-round-trip-gaps) before deleting
   any original.
 - **Struct-, array-, map- and set-valued node properties are dropped silently** — no warning names
   them. A fallback `UE.Expression` node comes back with that state at its class default.
@@ -88,7 +89,7 @@ So `/Game/Materials/Metal/M_Steel` → `DShader/Decompiled/Materials/Game/Materi
 
 ## See also
 
-- [`Docs/tools/decompiler.md`](../../Docs/tools/decompiler.md) — what is exported faithfully, and what is not
-- [`Docs/builtins/ue-expression.md`](../../Docs/builtins/ue-expression.md) — the generic fallback call
+- [`Docs/tools/decompiler.md`](../../../Plugins/DreamShader/Docs/tools/decompiler.md) — what is exported faithfully, and what is not
+- [`Docs/builtins/ue-expression.md`](../../../Plugins/DreamShader/Docs/builtins/ue-expression.md) — the generic fallback call
 - [`dream-shader-optimize`](../dream-shader-optimize/SKILL.md) — the required next step
 - [`dream-shader-verify`](../dream-shader-verify/SKILL.md) — the compile gate
