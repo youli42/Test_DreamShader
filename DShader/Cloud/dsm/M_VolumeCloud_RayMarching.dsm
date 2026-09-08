@@ -296,8 +296,11 @@ GraphFunction CloudRayMarch(
             // CloudTex 本身每朵云边缘→0 内部→1，故直接以 Den 作剖面做 ValueErosion 侵蚀。
             if (max(CloudErosionStrength, 0.0) > 0.001)
             {
-                // 当前采样点的世界坐标（translated world 空间，与 vapor 的 WSampleLocation 一致）。
-                float3 WorldSample = ResolvedView.TranslatedWorldCameraOrigin + RayDirWorld * WorldDist;
+                // 前采样点的世界坐标（绝对世界，固定于世界空间）。
+                // 必须用 WorldCameraOrigin（绝对世界）而非 TranslatedWorldCameraOrigin（随相机平移），
+                // 否则侵蚀噪声场锚定在相机上、随屏幕移动。
+                // WorldCameraOrigin 是 LWC double（FDFVector3），需先 DFHackToFloat 降精度到 float3 再与偏移相加。
+                float3 WorldSample = DFHackToFloat(ResolvedView.WorldCameraOrigin) + RayDirWorld * WorldDist;
                 float3 SweptUVW = WorldSample - CloudWindSpeed * UE.Time();
                 float3 NoiseUVW = SweptUVW * max(CloudNoiseFreq, 0.00001);
                 float NoiseVal = saturate(Texture3DSample(CloudNoiseTex, CloudNoiseTexSampler, NoiseUVW).r);
