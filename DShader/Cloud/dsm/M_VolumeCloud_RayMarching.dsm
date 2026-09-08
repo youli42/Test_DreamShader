@@ -71,6 +71,31 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
             Description = "包围盒边界淡出宽度（UVW单位）。防止盒子面把云硬切断成白色轮廓；值越大边缘越柔和";
             ParameterName = "边界淡出宽度";
         ];
+        Texture3D CloudNoiseTex = Path(Engine, "EngineSky/VolumetricClouds/VT_PerlinWorley_Balanced") [
+            Group = "体积云侵蚀"; SortPriority = 120;
+            Description = "侵蚀噪声纹理（引擎自带 VT_PerlinWorley_Balanced，Perlin/Worley 混合，.r 通道作侵蚀值，wrap 平铺）";
+            ParameterName = "侵蚀噪声纹理";
+        ];
+        vec3 CloudWindSpeed = vec3(0.0, 0.0, 4.0) [
+            Group = "体积云侵蚀"; SortPriority = 130;
+            Description = "世界空间风速（米/秒）。云噪声场沿此方向随时间漂移";
+            ParameterName = "风速度";
+        ];
+        float CloudNoiseFreq = 0.01 [
+            Group = "体积云侵蚀"; SortPriority = 140; Slider(0.001, 0.05);
+            Description = "侵蚀噪声空间频率（每米）。越大噪声越细碎";
+            ParameterName = "噪声频率";
+        ];
+        float CloudErosionStrength = 0.35 [
+            Group = "体积云侵蚀"; SortPriority = 150; Slider(0, 2);
+            Description = "侵蚀强度。噪声从云剖面中削掉的比例，越大边缘越破碎/丝缕";
+            ParameterName = "侵蚀强度";
+        ];
+        float CloudErosionNoiseOffset = 0.5 [
+            Group = "体积云侵蚀"; SortPriority = 160; Slider(0, 1);
+            Description = "侵蚀噪声阈值偏移。抬高则侵蚀更弱（只有高噪声区被削），调低则整体更碎";
+            ParameterName = "侵蚀噪声阈值";
+        ];
     }
 
     Settings = {
@@ -97,7 +122,9 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
             CloudTex, CloudColor, CloudOpacityStrength, CloudSteps,
             CloudShadowSteps, CloudShadowRange, CloudShadowOffset,
             CloudShadowStrength, CloudSilverLining, CloudSilverLiningBackPower,
-            CloudDitherScale, CloudAmbient, CloudBoundaryFade);
+            CloudDitherScale, CloudAmbient, CloudBoundaryFade,
+            CloudNoiseTex, CloudWindSpeed, CloudNoiseFreq,
+            CloudErosionStrength, CloudErosionNoiseOffset);
 
         WPO      = CloudWPO();
         Emissive = RM.rgb;
@@ -147,10 +174,14 @@ GraphFunction CloudRayMarch(
     in float CloudShadowOffset,
     in float CloudShadowStrength,
     in float CloudSilverLining,
-    in float CloudSilverLiningBackPower,
-    in float CloudDitherScale,
+    in float CloudSilverLiningBackPower,    in float CloudDitherScale,
     in float3 CloudAmbient,
     in float CloudBoundaryFade,
+    in Texture3D CloudNoiseTex,
+    in float3 CloudWindSpeed,
+    in float CloudNoiseFreq,
+    in float CloudErosionStrength,
+    in float CloudErosionNoiseOffset,
     out float4 RM)
 {
     float3 BMin = GetPrimitiveData(Parameters).LocalObjectBoundsMin;
@@ -220,6 +251,18 @@ GraphFunction CloudRayMarch(
 
         float StepLen = length(RStep);
 
+        // 世界坐标流动/侵蚀采样所需的世界步进量。
+        // 把 UVW 步长经"逆 swizzle + BSize"转回 primitive-local，再经 LocalToWorld 3x3 转世界。
+        // ViewDir 经 (x, -z, y) 的方向 swizzle，故方向逆 swizzle 为 (x, z, -y)。
+        float3 RStepLocal = float3(RStep.x, RStep.z, -RStep.y) * BSize;
+        float3 RStepWorld = mul(RStepLocal, GetLocalToWorld3x3(Parameters));
+        float WorldStep = dot(RStepWorld, RayDirWorld);
+        // 起始世界距离 = UVW 入口相对相机（局部坐标）经旋转/缩放后的世界位移，投影到世界视线方向。
+        // Cur 每步增长 RStep（UVW），故世界距离按 WorldStep 累加即可，初始即入口偏移。
+        float3 EntryDeltaLocal = float3(Entry.x - CamUVW.x, Entry.z - CamUVW.z, -(Entry.y - CamUVW.y)) * BSize;
+        float3 EntryDeltaWorld = mul(EntryDeltaLocal, GetLocalToWorld3x3(Parameters));
+        float WorldDist = dot(EntryDeltaWorld, RayDirWorld);
+
         int ShSteps = max((int)CloudShadowSteps, 2);
         float3 ShStep = ToLight * CloudShadowRange / (float)ShSteps;
 
@@ -247,6 +290,23 @@ GraphFunction CloudRayMarch(
             // 没有这层衰减时，盒子面处密度仍非零，云被盒子硬切断成白色轮廓。
             float FadeDist = min(min(min(Cur.x, 1.0 - Cur.x), min(Cur.y, 1.0 - Cur.y)), min(Cur.z, 1.0 - Cur.z));
             Den *= saturate(FadeDist / max(CloudBoundaryFade, 0.0001));
+
+            // 侵蚀 + 流动（参考 vapor SampleUprezzedCloudDensity）。
+            // 流动在世界空间做：Swept = 世界采样点 - WindSpeed * GameTime，再乘空间频率。
+            // CloudTex 本身每朵云边缘→0 内部→1，故直接以 Den 作剖面做 ValueErosion 侵蚀。
+            if (max(CloudErosionStrength, 0.0) > 0.001)
+            {
+                // 当前采样点的世界坐标（translated world 空间，与 vapor 的 WSampleLocation 一致）。
+                float3 WorldSample = ResolvedView.TranslatedWorldCameraOrigin + RayDirWorld * WorldDist;
+                float3 SweptUVW = WorldSample - CloudWindSpeed * UE.Time();
+                float3 NoiseUVW = SweptUVW * max(CloudNoiseFreq, 0.00001);
+                float NoiseVal = saturate(Texture3DSample(CloudNoiseTex, CloudNoiseTexSampler, NoiseUVW).r);
+
+                float ErosionVal = saturate((NoiseVal - CloudErosionNoiseOffset) / max(1.0 - CloudErosionNoiseOffset, 0.0001));
+                ErosionVal *= CloudErosionStrength;
+                float InvE = max(1.0 - ErosionVal, 0.0001);
+                Den = saturate((Den - ErosionVal) / InvE);
+            }
 
             if (tCur <= tOcc && Den >= 0.02 && Tr > 0.003)
             {
@@ -282,6 +342,7 @@ GraphFunction CloudRayMarch(
 
             Cur += RStep;
             tCur += tStep;
+            WorldDist += WorldStep;
         }
 
         RM = float4(Col * CloudColor.rgb, 1.0 - Tr);
