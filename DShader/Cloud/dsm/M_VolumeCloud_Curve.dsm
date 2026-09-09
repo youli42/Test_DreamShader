@@ -1,6 +1,6 @@
 // M_VolumeCloud.dsm -- a DreamShader material. Compiles to /Game/Cloud/dsm/M_VolumeCloud.
 import "dsh_VolumeCloud.dsh"
-Shader(Name="Cloud/dsm/M_VolumeCloud")
+Shader(Name="Cloud/dsm/M_VolumeCloud_Curve")
 {
     Properties = {
         // 体积云基础参数
