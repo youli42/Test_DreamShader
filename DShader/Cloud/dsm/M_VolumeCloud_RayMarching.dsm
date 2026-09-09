@@ -6,96 +6,98 @@
 Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
 {
     Properties = {
-        Texture3D CloudTex = Path(Game, "Cloud/Texture/Volume/T_Volume_VolumeCloud_03") [
-            Group = "体积云"; SortPriority = 5;
-            Description = "3D 云密度贴图（采样较红通道 .r 作密度）";
-            ParameterName = "云纹理";
-        ];
-        vec3 CloudColor = vec3(0.8, 0.8, 0.8) [
-            Group = "体积云"; SortPriority = 10;
-            Description = "云体颜色乘数";
-            ParameterName = "云颜色";
-        ];
-        float CloudOpacityStrength = 8.0 [
-            Group = "体积云"; SortPriority = 20; Slider(1, 80);
-            Description = "Beer-Lambert 消光密度，越大越不透明";
-            ParameterName = "不透明度强度";
-        ];
-        float CloudSteps = 24.0 [
-            Group = "体积云"; SortPriority = 30; Slider(16, 128);
-            Description = "射线步进采样步数";
-            ParameterName = "采样步数";
-        ];
-        float CloudShadowSteps = 8.0 [
-            Group = "体积云"; SortPriority = 40; Slider(2, 16);
-            Description = "阴影射线采样步数";
-            ParameterName = "阴影采样步数";
-        ];
-        float CloudShadowRange = 0.3 [
-            Group = "体积云"; SortPriority = 50; Slider(0.1, 3);
-            Description = "阴影射线在 UVW 空间中的总长度";
-            ParameterName = "阴影长度";
-        ];
-        float CloudShadowOffset = 2.0 [
-            Group = "体积云"; SortPriority = 60; Slider(-2, 2);
-            Description = "阴影步进起点沿阳光方向（朝太阳）偏移的步数";
-            ParameterName = "阴影起点偏移";
-        ];
-        float CloudShadowStrength = 8.0 [
-            Group = "体积云"; SortPriority = 70; Slider(0.5, 80);
-            Description = "阴影吸收乘数，越大阴影越厚";
-            ParameterName = "阴影强度";
-        ];
-        float CloudSilverLining = 2.0 [
-            Group = "体积云"; SortPriority = 80; Slider(0, 5);
-            Description = "背光边缘光强度，0 关闭；仅视线看向太阳方向时生效";
-            ParameterName = "背光边缘光强度";
-        ];
-        float CloudSilverLiningBackPower = 2.5 [
-            Group = "体积云"; SortPriority = 90; Slider(0.5, 8);
-            Description = "视线与阳光方向夹角的过渡锐度";
-            ParameterName = "背光方向锐度";
-        ];
-        float CloudDitherScale = 1.0 [
-            Group = "体积云"; SortPriority = 100; Slider(0, 2);
-            Description = "采样起点抖动幅度（以步长为单位），需配合 TAA";
-            ParameterName = "抖动强度";
-        ];
-        vec3 CloudAmbient = vec3(0.32, 0.37, 0.40) [
-            Group = "体积云"; SortPriority = 110;
-            Description = "天空环境光兜底颜色";
-            ParameterName = "环境光颜色";
-        ];
-        float CloudBoundaryFade = 0.08 [
-            Group = "体积云"; SortPriority = 115; Slider(0, 0.5);
-            Description = "包围盒边界淡出宽度（UVW单位）。防止盒子面把云硬切断成白色轮廓；值越大边缘越柔和";
-            ParameterName = "边界淡出宽度";
-        ];
-        Texture3D CloudNoiseTex = Path(Engine, "EngineSky/VolumetricClouds/VT_PerlinWorley_Balanced") [
-            Group = "体积云侵蚀"; SortPriority = 120;
-            Description = "侵蚀噪声纹理（引擎自带 VT_PerlinWorley_Balanced，Perlin/Worley 混合，.r 通道作侵蚀值，wrap 平铺）";
-            ParameterName = "侵蚀噪声纹理";
-        ];
-        vec3 CloudWindSpeed = vec3(0.0, 0.0, 4.0) [
-            Group = "体积云侵蚀"; SortPriority = 130;
-            Description = "世界空间风速（米/秒）。云噪声场沿此方向随时间漂移";
-            ParameterName = "风速度";
-        ];
-        float CloudNoiseFreq = 0.01 [
-            Group = "体积云侵蚀"; SortPriority = 140; Slider(0.001, 0.05);
-            Description = "侵蚀噪声空间频率（每米）。越大噪声越细碎";
-            ParameterName = "噪声频率";
-        ];
-        float CloudErosionStrength = 0.35 [
-            Group = "体积云侵蚀"; SortPriority = 150; Slider(0, 2);
-            Description = "侵蚀强度。噪声从云剖面中削掉的比例，越大边缘越破碎/丝缕";
-            ParameterName = "侵蚀强度";
-        ];
-        float CloudErosionNoiseOffset = 0.5 [
-            Group = "体积云侵蚀"; SortPriority = 160; Slider(0, 1);
-            Description = "侵蚀噪声阈值偏移。抬高则侵蚀更弱（只有高噪声区被削），调低则整体更碎";
-            ParameterName = "侵蚀噪声阈值";
-        ];
+        // 体积云基础参数
+        Group("体积云") {
+            Texture3D CloudTex = Path(Game, "Cloud/Texture/Volume/T_Volume_VolumeCloud_03") [
+                Description = "3D 云密度贴图（采样较红通道 .r 作密度）";
+                ParameterName = "云纹理";
+            ];
+            vec3 CloudColor = vec3(0.8, 0.8, 0.8) [
+                Description = "云体颜色乘数";
+                ParameterName = "云颜色";
+            ];
+            float CloudOpacityStrength = 8.0 [
+                Slider(1, 80);
+                Description = "Beer-Lambert 消光密度，越大越不透明";
+                ParameterName = "不透明度强度";
+            ];
+            float CloudSteps = 24.0 [
+                Slider(16, 128);
+                Description = "射线步进采样步数";
+                ParameterName = "采样步数";
+            ];
+            float CloudShadowSteps = 8.0 [
+                Slider(2, 16);
+                Description = "阴影射线采样步数";
+                ParameterName = "阴影采样步数";
+            ];
+            float CloudShadowRange = 0.3 [
+                Slider(0.1, 3);
+                Description = "阴影射线在 UVW 空间中的总长度";
+                ParameterName = "阴影长度";
+            ];
+            float CloudShadowOffset = 2.0 [
+                Slider(-2, 2);
+                Description = "阴影步进起点沿阳光方向（朝太阳）偏移的步数";
+                ParameterName = "阴影起点偏移";
+            ];
+            float CloudShadowStrength = 8.0 [
+                Slider(0.5, 80);
+                Description = "阴影吸收乘数，越大阴影越厚";
+                ParameterName = "阴影强度";
+            ];
+            float CloudSilverLining = 2.0 [
+                Slider(0, 5);
+                Description = "背光边缘光强度，0 关闭；仅视线看向太阳方向时生效";
+                ParameterName = "背光边缘光强度";
+            ];
+            float CloudSilverLiningBackPower = 2.5 [
+                Slider(0.5, 8);
+                Description = "视线与阳光方向夹角的过渡锐度";
+                ParameterName = "背光方向锐度";
+            ];
+            float CloudDitherScale = 1.0 [
+                Slider(0, 2);
+                Description = "采样起点抖动幅度（以步长为单位），需配合 TAA";
+                ParameterName = "抖动强度";
+            ];
+            vec3 CloudAmbient = vec3(0.32, 0.37, 0.40) [
+                Description = "(已废弃) 天空环境光兜底颜色；现改为天空SH辐照度，参数保留仅为兼容旧实例";
+                ParameterName = "环境光颜色";
+            ];
+            float CloudBoundaryFade = 0.08 [
+                Slider(0, 0.5);
+                Description = "包围盒边界淡出宽度（UVW单位）。防止盒子面把云硬切断成白色轮廓；值越大边缘越柔和";
+                ParameterName = "边界淡出宽度";
+            ];
+        }
+
+        // 体积云侵蚀
+        Group("体积云侵蚀") {
+            Texture3D CloudNoiseTex = Path(Engine, "EngineSky/VolumetricClouds/VT_PerlinWorley_Balanced") [
+                Description = "侵蚀噪声纹理（引擎自带 VT_PerlinWorley_Balanced，Perlin/Worley 混合，.r 通道作侵蚀值，wrap 平铺）";
+                ParameterName = "侵蚀噪声纹理";
+            ];
+            vec3 CloudWindSpeed = vec3(0.0, 0.0, 4.0) [
+                Description = "世界空间风速（米/秒）。云噪声场沿此方向随时间漂移";
+                ParameterName = "风速度";
+            ];
+            float CloudNoiseFreq = 0.01 [
+                Slider(0.001, 0.05);
+                Description = "侵蚀噪声空间频率（每米）。越大噪声越细碎";
+                ParameterName = "噪声频率";
+            ];
+            float CloudErosionStrength = 0.35 [
+                Slider(0, 2);
+                Description = "侵蚀强度。噪声从云剖面中削掉的比例，越大边缘越破碎/丝缕";
+                ParameterName = "侵蚀强度";
+            ];
+            float CloudErosionNoiseOffset = 0.5 [
+                Slider(0, 1);
+                Description = "侵蚀噪声阈值偏移。抬高则侵蚀更弱（只有高噪声区被削），调低则整体更碎";
+                ParameterName = "侵蚀噪声阈值";
+            ];
+        }
     }
 
     Settings = {
@@ -122,7 +124,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
             CloudTex, CloudColor, CloudOpacityStrength, CloudSteps,
             CloudShadowSteps, CloudShadowRange, CloudShadowOffset,
             CloudShadowStrength, CloudSilverLining, CloudSilverLiningBackPower,
-            CloudDitherScale, CloudAmbient, CloudBoundaryFade,
+            CloudDitherScale, CloudBoundaryFade,
             CloudNoiseTex, CloudWindSpeed, CloudNoiseFreq,
             CloudErosionStrength, CloudErosionNoiseOffset);
 
@@ -132,7 +134,11 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_RayMarching")
     }
 }
 
-// WPO：当相机进入立方体（带吸附余量）时，移动立方体使其中心落在相机上。
+// WPO：仅当相机完全进入立方体内部后，才把立方体中心平移到相机上（居中跟随）。
+// 触发判定不再外扩余量：此前用 BMin-Snap..BMax+Snap（Snap=半盒宽）作触发带，
+// 相机还在盒外就会整盒"全额居中"跳变（位移量可达一个整盒宽），
+// 把相机提前包进一个"空心"跟随盒，同时整帧构图/覆盖突变 -> 云提前位移 + 亮度骤变。
+// 现改为严格按各轴真实边界判断，只有真正进入盒子后才开始居中跟随。
 // 输出为 translated world 空间。完全在 primitive（local）空间内计算，以缩短 LWC 数学；
 // 只有最终的局部位移再经 LocalToWorld 3x3 旋转/缩放回世界空间。
 GraphFunction CloudWPO(out float3 WPO)
@@ -140,27 +146,26 @@ GraphFunction CloudWPO(out float3 WPO)
     float3 BMin = GetPrimitiveData(Parameters).LocalObjectBoundsMin;
     float3 BMax = GetPrimitiveData(Parameters).LocalObjectBoundsMax;
     float3 BCenter = (BMin + BMax) * 0.5;
-    float3 BSX = max(BMax - BMin, 0.001);
 
-    float3 VLocal = GetPositionPrimitiveSpace(Parameters);
-
-    // 相机转 primitive 空间 -- 与 GetPositionPrimitiveSpace 一致，其内部做
-    // DFFastMultiplyDemote(Parameters.AbsoluteWorldPosition, WorldToLocal)
+    // 相机转 primitive 空间 -- 与 CloudRayMarch 中的一致：
+    // DFFastMultiplyDemote(ResolvedView.WorldCameraOrigin, GetPrimitiveData(Parameters).WorldToLocal)
     float3 CamLocal =
         DFFastMultiplyDemote(ResolvedView.WorldCameraOrigin, GetPrimitiveData(Parameters).WorldToLocal).xyz;
 
-    float Snap = BSX.x * 0.5;
+    // 相机完全进入盒子（各轴严格落在真实边界内）才触发跟随
     float Inside = 0.0;
-    if (CamLocal.x > BMin.x - Snap && CamLocal.x < BMax.x + Snap) {
-        if (CamLocal.y > BMin.y - Snap && CamLocal.y < BMax.y + Snap) {
-            if (CamLocal.z > BMin.z - Snap && CamLocal.z < BMax.z + Snap) {
+    if (CamLocal.x > BMin.x && CamLocal.x < BMax.x) {
+        if (CamLocal.y > BMin.y && CamLocal.y < BMax.y) {
+            if (CamLocal.z > BMin.z && CamLocal.z < BMax.z) {
                 Inside = 1.0;
             }
         }
     }
 
     float3 LocalDelta = (CamLocal - BCenter) * Inside;
-    WPO = mul(GetLocalToWorld3x3(Parameters), LocalDelta);
+    // 注意用行向量*矩阵（与 CloudRayMarch 中 RStepLocal/EntryDeltaLocal 的写法一致）；
+    // 之前 mul(矩阵, LocalDelta) 是转置乘，actor 带旋转时位移方向会被镜像。
+    WPO = mul(LocalDelta, GetLocalToWorld3x3(Parameters));
 }
 
 // 像素射线步进。返回预乘颜色 + 不透明度。
@@ -175,7 +180,6 @@ GraphFunction CloudRayMarch(
     in float CloudShadowStrength,
     in float CloudSilverLining,
     in float CloudSilverLiningBackPower,    in float CloudDitherScale,
-    in float3 CloudAmbient,
     in float CloudBoundaryFade,
     in Texture3D CloudNoiseTex,
     in float3 CloudWindSpeed,
@@ -270,9 +274,13 @@ GraphFunction CloudRayMarch(
         float CosT = clamp(dot(ViewDir, ToLight), -0.999, 0.999);
         float BackLit = pow(saturate(CosT), max(CloudSilverLiningBackPower, 0.5));
 
-        // 天空环境光：参考使用 View.SkyIrradianceEnvironmentMap，但该字段不在
-        // 材质编译链中；改用 SkyLightColor * 一个经过调校的兜底颜色。
-        float3 SkyAmbient = max(CloudAmbient * ResolvedView.SkyLightColor.rgb, float3(0, 0, 0));
+        // 天空环境光：
+        // 读取完整 View.SkyIrradianceEnvironmentMap 的 L0 常数项（天空平均辐照度）。
+        // ResolvedView 是精简 ViewState，不含该 SH 字段，因此这里必须用 View。
+        float3 SkyAmbient = max(float3(0, 0, 0), float3(
+            View.SkyIrradianceEnvironmentMap[0].w,
+            View.SkyIrradianceEnvironmentMap[1].w,
+            View.SkyIrradianceEnvironmentMap[2].w)) * ResolvedView.SkyLightColor.rgb;
 
         float3 Cur = Entry;
         float3 Col = float3(0, 0, 0);
@@ -336,6 +344,9 @@ GraphFunction CloudRayMarch(
                 Direct += LCol * EdgeMask * BackLit * Shadow * CloudSilverLining;
 
                 float AltFade = lerp(1.0, 0.1, saturate(Cur.y));
+                // 环境光使用天空SH辐照度，随日夜/天光实时变化；
+                // 这里不乘太阳 Shadow（天空环境光不是太阳直射光），
+                // 由 AltFade 做云底垂直方向的渐隐。
                 float3 Ambient = SkyAmbient * AltFade;
 
                 float3 Lighting = Direct + Ambient;
