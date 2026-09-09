@@ -4,94 +4,104 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_Curve")
 {
     Properties = {
         // 体积云基础参数
-        vec3 _BaseColor = vec3(1.0, 1.0, 1.0) [
-            Group = "体积云基础参数"; SortPriority = 10;
-            Description = "云体基础颜色乘数";
-            ParameterName = "基础色";
-        ];
-        vec3 _EmissiveColor = vec3(0.0, 0.0, 0.0) [
-            Group = "体积云基础参数"; SortPriority = 20;
-            Description = "云体自发光颜色乘数";
-            ParameterName = "自发光色";
-        ];
-        vec3 _Extinction = vec3(1.0, 1.0, 1.0) [
-            Group = "体积云基础参数"; SortPriority = 30;
-            Description = "背光边缘颜色";
-            ParameterName = "消光颜色";
-        ];
-        float _AmbientOcclusion = 1.0 [
-            Group = "体积云基础参数"; SortPriority = 40;
-            Description = "AO";
-            ParameterName = "AO";
-        ];
-        float _Density = 1.0 [
-            Group = "体积云基础参数"; SortPriority = 45; Slider(0.01, 8);
-            Description = "云体密度乘数，控制云层整体不透明度";
-            ParameterName = "密度";
-        ];
+        Group("体积云基础参数") {
+            vec3 _BaseColor = vec3(1.0, 1.0, 1.0) [
+                Description = "云体基础颜色乘数";
+                ParameterName = "基础色";
+            ];
+            vec3 _EmissiveColor = vec3(0.0, 0.0, 0.0) [
+                Description = "云体自发光颜色乘数";
+                ParameterName = "自发光色";
+            ];
+            vec3 _Extinction = vec3(1.0, 1.0, 1.0) [
+                Description = "背光边缘颜色";
+                ParameterName = "消光颜色";
+            ];
+            float _AmbientOcclusion = 1.0 [
+                Description = "AO";
+                ParameterName = "AO";
+            ];
+            float _Density = 1.0 [
+                Slider(0.01, 8);
+                Description = "云体密度乘数，控制云层整体不透明度";
+                ParameterName = "密度";
+            ];
+        }
+
         // 体积云Debug
-        float _Tile_Km = 10.0 [
-            Group = "体积云Debug"; SortPriority = 10; Slider(0.5, 8);
-            Description = "天空坐标网格瓦片边长(km)，可视化每 TileKm km 一格";
-            ParameterName = "网格瓦片(km)";
-        ];
+        Group("体积云Debug") {
+            float _Tile_Km = 10.0 [
+                Slider(0.5, 8);
+                Description = "天空坐标网格瓦片边长(km)，可视化每 TileKm km 一格";
+                ParameterName = "网格瓦片(km)";
+            ];
+        }
+
         // 体积云高级参数
-        float _PhaseG = 0.6 [
-            Group = "体积云高级参数"; SortPriority = 20; Slider(-1, 1);
-            Description = "主相位函数不对称因子，正值使光向前散射（朝太阳方向）";
-            ParameterName = "相位G";
-        ];
-        float _PhaseG2 = -0.4 [
-            Group = "体积云高级参数"; SortPriority = 30; Slider(-1, 1);
-            Description = "第二相位函数不对称因子，用于更真实的光散射";
-            ParameterName = "相位G2";
-        ];
-        float _PhaseBlend = 0.25 [
-            Group = "体积云高级参数"; SortPriority = 40; Slider(0, 1);
-            Description = "两个相位函数之间的混合系数";
-            ParameterName = "相位混合";
-        ];
-        float _MultiScatteringContribution = 1.0 [
-            Group = "体积云高级参数"; SortPriority = 50; Slider(0, 2);
-            Description = "多次散射近似贡献值，模拟光在云内多次反弹";
-            ParameterName = "多次散射贡献";
-        ];
-        float _MultiScatteringOcclusion = 0.8 [
-            Group = "体积云高级参数"; SortPriority = 60; Slider(0, 1);
-            Description = "多次散射遮蔽系数，控制云内部自遮挡强度";
-            ParameterName = "多次散射遮蔽";
-        ];
-        float _MultiScatteringEccentricity = 0.7 [
-            Group = "体积云高级参数"; SortPriority = 70; Slider(-1, 1);
-            Description = "多次散射偏心率，影响多次散射光的方向分布";
-            ParameterName = "多次散射偏心率";
-        ];
-        float _ConservativeDensity = 1.0 [
-            Group = "体积云高级参数"; SortPriority = 80; Slider(0, 1);
-            Description = "保守密度阈值，低于此密度的区域视为无云";
-            ParameterName = "保守密度";
-        ];
+        Group("体积云高级参数") {
+            float _PhaseG = 0.6 [
+                Slider(-1, 1);
+                Description = "主相位函数不对称因子，正值使光向前散射（朝太阳方向）";
+                ParameterName = "相位G";
+            ];
+            float _PhaseG2 = -0.4 [
+                Slider(-1, 1);
+                Description = "第二相位函数不对称因子，用于更真实的光散射";
+                ParameterName = "相位G2";
+            ];
+            float _PhaseBlend = 0.25 [
+                Slider(0, 1);
+                Description = "两个相位函数之间的混合系数";
+                ParameterName = "相位混合";
+            ];
+            float _MultiScatteringContribution = 1.0 [
+                Slider(0, 2);
+                Description = "多次散射近似贡献值，模拟光在云内多次反弹";
+                ParameterName = "多次散射贡献";
+            ];
+            float _MultiScatteringOcclusion = 0.8 [
+                Slider(0, 1);
+                Description = "多次散射遮蔽系数，控制云内部自遮挡强度";
+                ParameterName = "多次散射遮蔽";
+            ];
+            float _MultiScatteringEccentricity = 0.7 [
+                Slider(-1, 1);
+                Description = "多次散射偏心率，影响多次散射光的方向分布";
+                ParameterName = "多次散射偏心率";
+            ];
+            float _ConservativeDensity = 1.0 [
+                Slider(0, 1);
+                Description = "保守密度阈值，低于此密度的区域视为无云";
+                ParameterName = "保守密度";
+            ];
+        }
+
         // 体积云形态参数
-        float _SphereRadius = 0.5 [
-            Group = "体积云形态参数"; SortPriority = 5; Slider(0.01, 1);
-            Description = "圆形半径，用于圆形云层的尺寸控制";
-            ParameterName = "圆形半径";
-        ];
-        Texture2D _CloudTexture = Path(Game, "Cloud/Texture/SphereRenderMask") [
-            Group = "体积云形态参数"; SortPriority = 10;
-            Description = "云体纹理";
-            ParameterName = "体积云贴图";
-        ];
-        float _UV_Scale = 1.0 [
-            Group = "体积云形态参数"; SortPriority = 15; Slider(0.01, 8);
-            Description = "体积云贴图的 UV 缩放";
-            ParameterName = "贴图UV缩放";
-        ];
-        CurveAtlasRowParameter _CloudAtlas = vec3(0.0, 0.0, 0.0) [
-            Group="体积云形态参数"; SortPriority = 19;
-            Description = "使用曲线控制圆柱体的上下密度"
-            ParameterName = "云形态曲线";
-        ];
+        Group("体积云形态参数") {
+            float _SphereRadius = 0.5 [
+                Slider(0.01, 1);
+                Description = "圆形半径，用于圆形云层的尺寸控制";
+                ParameterName = "圆形半径";
+            ];
+            Texture2D _CloudTexture = Path(Game, "Cloud/Texture/SphereRenderMask") [
+                Description = "云体纹理";
+                ParameterName = "体积云贴图";
+            ];
+            float _UV_Scale = 1.0 [
+                Slider(0.01, 8);
+                Description = "体积云贴图的 UV 缩放";
+                ParameterName = "贴图UV缩放";
+            ];
+            float _Tile_Shape = 0.0 [
+                Slider(0, 1);
+                Description = "云体基础圆片是否平铺：1 = 按 UV 瓦片重复（frac 包裹，每个瓦片一朵云），0 = 不平铺（单朵大云，原始 UV）。调节时可快速对比单朵与平铺排列";
+                ParameterName = "圆片平铺";
+            ];
+            CurveAtlasRowParameter _CloudAtlas = vec3(0.0, 0.0, 0.0) [
+                Description = "使用曲线控制圆柱体的上下密度";
+                ParameterName = "云形态曲线";
+            ];
+        }
     }
 
     Settings = {
@@ -185,7 +195,7 @@ Shader(Name="Cloud/dsm/M_VolumeCloud_Curve")
         vec2 WP_UV = UE.WorldPosition().xy;
         WP_UV = WP_UV / (_UV_Scale * 100000);
         float CloudDensity = UE.TextureSample(OutputType="float3", Coordinates=WP_UV, TextureObject=_CloudTexture).r; // 使用贴图.r作为云的来源
-        CloudDensity = MkCircleSoft(WP_UV, _SphereRadius, _SphereRadius); // 使用自定义的圆形作为云姿态
+        CloudDensity = MkCircleSoft(WP_UV, _SphereRadius, _SphereRadius, _Tile_Shape); // 使用自定义的圆形作为云姿态，_Tile_Shape 控制是否平铺
 
         // 曲线控制云密度
         vec3 Curve = UE.CurveAtlasRowParameter(OutputType="float3", ParameterName = "体积云姿态曲线",

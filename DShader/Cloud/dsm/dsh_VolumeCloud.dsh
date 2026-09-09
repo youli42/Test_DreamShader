@@ -18,23 +18,23 @@ GraphFunction float3 SkyCoordDebug(in float Tile_Km)
 }
 
 // MkCircle -- 基于 UV 坐标和半径输出硬边圆形蒙版。
-// UV 自动 frac() 包裹，圆心固定在 (0.5, 0.5)，返回值 1.0 表示圆内，0.0 表示圆外。
-Function float MkCircle(in float2 UV, in float Radius)
+// Tile: 1 = 平铺，UV 经 frac() 包裹，圆心固定在 (0.5, 0.5) 并在每个 UV 瓦片内重复；
+//       0 = 不平铺，直接使用原始 UV。返回值 1.0 表示圆内，0.0 表示圆外。
+Function float MkCircle(in float2 UV, in float Radius, in float Tile)
 {
-    // float2 uv = frac(UV); // 让圆可以平铺
-    float2 uv = UV; // 让圆可以平铺
+    float2 uv = lerp(UV, frac(UV), Tile); // Tile: 1 = 平铺(frac 包裹)；0 = 不平铺
     float2 center = float2(0.5, 0.5);
     float dist = length(uv - center);
     return 1.0 - step(Radius, dist);
 }
 
 // MkCircleSoft -- 基于 UV 坐标和半径输出软边圆形蒙版。
-// UV 自动 frac() 包裹，圆心固定在 (0.5, 0.5)，返回值 1.0 表示圆内，0.0 表示圆外。
+// Tile: 1 = 平铺，UV 经 frac() 包裹，圆心固定在 (0.5, 0.5) 并在每个 UV 瓦片内重复；
+//       0 = 不平铺，直接使用原始 UV。返回值 1.0 表示圆内，0.0 表示圆外。
 // Softness 控制边缘过渡宽度：0 为硬边，值越大边缘越柔和。
-Function float MkCircleSoft(in float2 UV, in float Radius, in float Softness)
+Function float MkCircleSoft(in float2 UV, in float Radius, in float Softness, in float Tile)
 {
-    float2 uv = UV;
-    // float2 uv = frac(UV);
+    float2 uv = lerp(UV, frac(UV), Tile); // Tile: 1 = 平铺(frac 包裹)；0 = 不平铺
     float2 center = float2(0.5, 0.5);
     float dist = length(uv - center);
     return 1.0 - smoothstep(Radius - Softness, Radius + Softness, dist);
