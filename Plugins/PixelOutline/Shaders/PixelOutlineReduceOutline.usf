@@ -1,0 +1,75 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+// Pass 1 -- reduce the full resolution binary mask down to one value per pixel
+// block. Rendered into the low resolution grid, so one pixel == one block.
+// The reduction is a MAX, never an average: a single edge pixel inside the block
+// turns the whole block into an outline block, which is what keeps thin contours
+// from disappearing.
+//
+// Unity equivalent: ScreenReduceOutlineFragment / ScreenPixelOutline.hlsl,
+// which is also a fullscreen blit pass, not a compute dispatch.
+
+#include "/Engine/Public/Platform.ush"
+#include "/Plugin/PixelOutline/PixelOutlineCommon.ush"
+
+Texture2D PackedTexture;
+SamplerState PackedPointSampler;
+
+float SamplePackedAlpha(int2 Pixel, int2 SourceSize)
+{
+	float2 UV = ((float2)Pixel + 0.5) / (float2)SourceSize;
+	return PackedTexture.SampleLevel(PackedPointSampler, UV, 0).a;
+}
+
+void ReduceOutlinePS(noperspective float4 UVAndScreenPos : TEXCOORD0, out float4 OutColor : SV_Target0)
+{
+	int2 GridSize = PO_GridSize;
+
+	// The pixel centre (i + 0.5) / GridSize maps to block i.
+	int2 BlockIndex = min((int2)floor(UVAndScreenPos.xy * (float2)GridSize), GridSize - 1);
+
+	int2 SourceSize = GetSourceSizeInt();
+	int2 BlockSize = PO_BlockSize2D;
+	int2 BlockStart = BlockIndex * BlockSize;
+
+	float BlockMask = 0.0;
+
+	// Dynamic loop capped at 64x64 source pixels, matching the Unity clamp.
+	// Total work per frame stays around one source pixel per source pixel.
+	[loop]
+	for (int y = 0; y < 64; y++)
+	{
+		if (y >= BlockSize.y || BlockStart.y + y >= SourceSize.y)
+		{
+			break;
+		}
+
+		[loop]
+		for (int x = 0; x < 64; x++)
+		{
+			if (x >= BlockSize.x || BlockStart.x + x >= SourceSize.x)
+			{
+				break;
+			}
+
+			BlockMask = max(BlockMask, SamplePackedAlpha(BlockStart + int2(x, y), SourceSize));
+
+			if (BlockMask >= 1.0)
+			{
+				break;
+			}
+		}
+
+		if (BlockMask >= 1.0)
+		{
+			break;
+		}
+	}
+
+	// The block colour is taken from the block centre so that colour and outline
+	// share the exact same block grid.
+	float2 BlockCenterUV = GetPixelBlockCenterUV(BlockIndex, SourceSize, BlockSize);
+	float3 BlockColor = PackedTexture.SampleLevel(PackedPointSampler, BlockCenterUV, 0).rgb;
+
+	OutColor = float4(BlockColor, BlockMask);
+}

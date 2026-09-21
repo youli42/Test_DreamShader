@@ -1,0 +1,62 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+// Pass 2 -- point sample the low resolution block grid by block index and blend
+// the outline colour over the marked blocks. Every pixel inside one block reads
+// the same grid texel, so the result is block aligned by construction.
+//
+// Unity equivalent: ScreenCompositeFragment / ScreenPixelOutline.hlsl.
+
+#include "/Engine/Public/Platform.ush"
+#include "/Plugin/PixelOutline/PixelOutlineCommon.ush"
+
+Texture2D GridTexture;
+SamplerState GridPointSampler;
+Texture2D PackedTexture;
+SamplerState PackedPointSampler;
+
+void CompositePS(noperspective float4 UVAndScreenPos : TEXCOORD0, out float4 OutColor : SV_Target0)
+{
+	float2 UV = UVAndScreenPos.xy;
+
+	int2 SourceSize = GetSourceSizeInt();
+	int2 BlockSize = PO_BlockSize2D;
+	int2 GridSize = PO_GridSize;
+	int2 BlockIndex = GetPixelBlockIndex(UV, SourceSize, GridSize, BlockSize);
+
+	float2 GridUV = ((float2)BlockIndex + 0.5) / (float2)GridSize;
+	float4 GridSample = GridTexture.SampleLevel(GridPointSampler, GridUV, 0);
+
+	int DebugMode = (int)PO_DebugParams.x;
+
+	float3 FinalColor;
+	float OutlineAlpha;
+
+	if (DebugMode == 1)
+	{
+		// Packed pixelated colour, before the block reduction.
+		FinalColor = PackedTexture.SampleLevel(PackedPointSampler, UV, 0).rgb;
+		OutlineAlpha = 0.0;
+	}
+	else if (DebugMode == 2)
+	{
+		// Full resolution binary edge mask.
+		float Mask = PackedTexture.SampleLevel(PackedPointSampler, UV, 0).a;
+		FinalColor = float3(Mask, Mask, Mask);
+		OutlineAlpha = 0.0;
+	}
+	else if (DebugMode == 3)
+	{
+		// Block level mask, magnified straight from the grid.
+		FinalColor = float3(GridSample.a, GridSample.a, GridSample.a);
+		OutlineAlpha = 0.0;
+	}
+	else
+	{
+		OutlineAlpha = step(0.5, GridSample.a) * saturate(PO_OutlineColor.a);
+		FinalColor = lerp(GridSample.rgb, PO_OutlineColor.rgb, OutlineAlpha);
+	}
+
+	// UE post process alpha semantics are the inverse of Unity's: 0 means opaque.
+	// The Unity pass returns 1.0 here, we must return 0.0.
+	OutColor = float4(FinalColor, 0.0);
+}

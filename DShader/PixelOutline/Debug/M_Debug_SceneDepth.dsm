@@ -1,0 +1,37 @@
+// 阶段 0 验收材质：验证 SceneTexture:SceneDepth 的可读性与量级。
+//
+// 迁移方案第 4.4 节：UE 的 CalcSceneDepth 已经做了 ConvertFromDeviceZ，
+// 返回线性世界单位深度，因此 Unity 的 LinearEyeDepth 一步不需要，
+// 但 log2 必须保留。本材质输出 log2(线性深度) 的灰度，用于确认量级，
+// 以便标定 r.PixelOutline.EdgeThreshold。
+
+Shader(Name="PixelOutline/Debug/M_Debug_SceneDepth")
+{
+    Settings = {
+        Domain                = "PostProcess";
+        ShadingModel          = "Unlit";
+        BlendableLocation     = "SceneColorAfterTonemapping";
+        BlendablePriority     = 101;
+        BlendableOutputAlpha  = false;
+        bDisablePreExposureScale = true;
+    }
+
+    Outputs = {
+        vec3 Color;
+        Base.EmissiveColor = Color;
+    }
+
+    Graph = {
+        float Depth = UE.SceneTexture(Id = "SceneDepth").r;
+        Color = DepthToDebugGray(Depth);
+    }
+}
+
+// 与像素描边 Pass0 中 SampleDepthSignal 完全相同的处理方式：
+// 先钳到近裁剪面，再取 log2。
+Function vec3 DepthToDebugGray(in float Depth)
+{
+    float EyeDepth = max(Depth, 0.01);
+    float LogDepth = log2(EyeDepth);
+    return saturate((LogDepth + 8.0) * 0.06).xxx;
+}

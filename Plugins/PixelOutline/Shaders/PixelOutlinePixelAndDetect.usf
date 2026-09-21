@@ -1,0 +1,140 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+// Pass 0 -- pixelate the already tone mapped scene colour and detect edges at
+// full resolution. RGB carries the pixelated colour, A carries the binary mask.
+//
+// Unity equivalent: ScreenPixelAndDetectFragment / ScreenPixelOutline.hlsl.
+
+#include "/Engine/Public/Platform.ush"
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+#include "/Engine/Private/SceneTexturesCommon.ush"
+#include "/Plugin/PixelOutline/PixelOutlineCommon.ush"
+
+// FScreenPassTextureViewportParameters Input flattens into Input_<Member>.
+SCREEN_PASS_TEXTURE_VIEWPORT(Input)
+
+Texture2D InputTexture;
+SamplerState InputSampler;      // bilinear -- used by the pixelation
+SamplerState InputPointSampler; // point -- used by the colour Sobel
+
+float SampleDepthSignal(float2 UV)
+{
+	// UE already returns a linear, world unit depth from CalcSceneDepth, so the
+	// Unity LinearEyeDepth step is dropped. The log2 is kept.
+	float SceneDepth = CalcSceneDepth(UV);
+	float NearClip = max(PO_DepthParams.x, 1e-5);
+	float EyeDepth = max(SceneDepth, NearClip);
+	return log2(EyeDepth);
+}
+
+float3 SampleNormalSignal(float2 UV)
+{
+	// PO_DebugParams.y == 1 disables the normal signal entirely (fallback when
+	// the engine build does not expose a usable world normal buffer).
+	if (PO_DebugParams.y > 0.5)
+	{
+		return float3(0.0, 0.0, 0.0);
+	}
+
+	// GBufferA stores the world normal as N * 0.5 + 0.5; decode and normalise,
+	// because UE hands out unnormalised normals here.
+	float3 N = SceneTexturesStruct_GBufferATexture.SampleLevel(SceneTexturesStruct_PointClampSampler, UV, 0).rgb * 2.0 - 1.0;
+	return N * rsqrt(max(dot(N, N), 1e-6));
+}
+
+float3 SampleColorSignal(float2 UV)
+{
+	return InputTexture.SampleLevel(InputPointSampler, saturate(UV), 0).rgb;
+}
+
+// Pixelation that keeps a stable, smooth transition at block boundaries instead
+// of a hard floor().
+float4 SamplePixelatedColor(float2 UV)
+{
+	float2 BlockSize = (float2)PO_BlockSize2D;
+	float2 SourceSize = GetSourceSizeFloat();
+	float2 SourceTexel = max(1.0 / SourceSize, PO_SourceSizeAndInvSize.zw);
+	float2 BlockTexelSize = SourceTexel * BlockSize;
+
+	float2 BoxSize = clamp(fwidth(UV) / BlockTexelSize, 1e-5, 1.0);
+	float2 BlockPosition = UV / BlockTexelSize - 0.5 * BoxSize;
+	float2 BlockOffset = smoothstep(1.0 - BoxSize, 1.0, frac(BlockPosition));
+	float2 PixelUV = (floor(BlockPosition) + 0.5 + BlockOffset) * BlockTexelSize;
+
+	return InputTexture.SampleLevel(InputSampler, saturate(PixelUV), 0);
+}
+
+// One unrolled loop accumulates all four signals at once.
+float4 CalculateSobelEdges(float2 UV)
+{
+	float2 ScreenTexel = PO_SourceSizeAndInvSize.zw;
+	float2 SampleStep = ScreenTexel * max(PO_EdgeParams.z, 0.5);
+
+	float DepthX = 0.0;
+	float DepthY = 0.0;
+	float3 NormalX = 0.0;
+	float3 NormalY = 0.0;
+	float LuminanceX = 0.0;
+	float LuminanceY = 0.0;
+	float3 ColorX = 0.0;
+	float3 ColorY = 0.0;
+
+	[unroll]
+	for (int i = 0; i < 9; i++)
+	{
+		float2 SampleUV = UV + kSobelOffsets[i] * SampleStep;
+
+		float Depth = SampleDepthSignal(SampleUV);
+		float3 Normal = SampleNormalSignal(SampleUV);
+		float3 Color = SampleColorSignal(SampleUV);
+		float Luminance = GetLuminance709(Color);
+
+		DepthX += Depth * kSobelX[i];
+		DepthY += Depth * kSobelY[i];
+		NormalX += Normal * kSobelX[i];
+		NormalY += Normal * kSobelY[i];
+		LuminanceX += Luminance * kSobelX[i];
+		LuminanceY += Luminance * kSobelY[i];
+		ColorX += Color * kSobelX[i];
+		ColorY += Color * kSobelY[i];
+	}
+
+	float DepthEdge = length(float2(DepthX, DepthY)) * kSobelNormalization;
+	float NormalEdge = sqrt(dot(NormalX, NormalX) + dot(NormalY, NormalY)) * kSobelNormalization;
+	float LuminanceEdge = length(float2(LuminanceX, LuminanceY)) * kSobelNormalization;
+	float ColorEdge = sqrt(dot(ColorX, ColorX) + dot(ColorY, ColorY)) * kSobelNormalization;
+
+	return float4(DepthEdge, NormalEdge, LuminanceEdge, ColorEdge);
+}
+
+// Signals are combined with max so that several weak noise sources can never add
+// up into something that looks like a real edge.
+float GetOutlineEdgeResponse(float4 SobelEdges)
+{
+	float GeometryEdge = max(SobelEdges.x * PO_Weights.x, SobelEdges.y * PO_Weights.y);
+	float LuminanceEdge = SobelEdges.z * PO_Weights.z * step(0.5, PO_EdgeParams.w);
+	float AppearanceEdge = max(LuminanceEdge, SobelEdges.w * PO_Weights.w);
+	return max(GeometryEdge, AppearanceEdge);
+}
+
+// Soft response first, then a hard binary mask. The block reduction therefore
+// only ever sees "whole block outlined" or "whole block clean".
+float GetBinaryOutlineMask(float2 UV)
+{
+	float EdgeResponse = GetOutlineEdgeResponse(CalculateSobelEdges(UV));
+	float EdgeSoftness = max(PO_EdgeParams.y, 1e-5);
+	float SoftMask = smoothstep(PO_EdgeParams.x, PO_EdgeParams.x + EdgeSoftness, EdgeResponse);
+	return step(0.5, SoftMask);
+}
+
+void PixelAndDetectPS(noperspective float4 UVAndScreenPos : TEXCOORD0, out float4 OutColor : SV_Target0)
+{
+	float2 UV = UVAndScreenPos.xy;
+	float2 InputUV = Input_UVViewportMin + UV * Input_UVViewportSize;
+
+	float4 PixelatedColor = SamplePixelatedColor(InputUV);
+	float EdgeMask = GetBinaryOutlineMask(InputUV);
+
+	OutColor = float4(PixelatedColor.rgb, EdgeMask);
+}

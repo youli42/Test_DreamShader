@@ -1,0 +1,37 @@
+// 阶段 0 验收材质：验证本工程渲染配置下 SceneTexture:WorldNormal 是否可读。
+//
+// 迁移方案第 4.4 节指出：WorldNormal 来自 GBufferA，引擎已解码为 -1..1 但
+// 未归一化；且 IsUsingGBuffers() 在非移动端等于 !IsForwardShadingEnabled()。
+// 本工程还开启了 Substrate（r.Substrate=True），因此必须先实测再定参数。
+//
+// 用法：在 Post Process Volume 的 Post Process Materials 中加入本材质，
+// 画面应显示世界空间法线（RGB = N*0.5+0.5）。若整屏黑色，说明 GBufferA 不可用，
+// 需要关闭 Substrate 或改用 r.PixelOutline.NormalSource 1 关闭法线信号。
+
+Shader(Name="PixelOutline/Debug/M_Debug_WorldNormal")
+{
+    Settings = {
+        Domain                = "PostProcess";
+        ShadingModel          = "Unlit";
+        BlendableLocation     = "SceneColorAfterTonemapping";
+        BlendablePriority     = 100;
+        BlendableOutputAlpha  = false;
+        bDisablePreExposureScale = true;
+    }
+
+    Outputs = {
+        vec3 Color;
+        Base.EmissiveColor = Color;
+    }
+
+    Graph = {
+        // 引擎已解码到 -1..1，但未归一化，必须自己归一化后再观察。
+        vec3 N = NormalizeWorldNormal(UE.SceneTexture(Id = "WorldNormal").rgb);
+        Color = N * 0.5 + 0.5;
+    }
+}
+
+Function vec3 NormalizeWorldNormal(in vec3 N)
+{
+    return N * rsqrt(max(dot(N, N), 1e-6));
+}

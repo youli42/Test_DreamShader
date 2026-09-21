@@ -1,0 +1,17 @@
+{
+	"FileVersion": 3,
+	"Version": "1.0",
+	"VersionName": "1.0",
+	"FriendlyName": "PixelOutline",
+	"Description": "Unity URP ScreenPixel style pixelated outline: full-res edge detect -> block max reduce -> block aligned composite.",
+	"Category": "Rendering",
+	"CanContainContent": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "PixelOutline",
+			"Type": "Runtime",
+			"LoadingPhase": "PostConfigInit"
+		}
+	]
+}

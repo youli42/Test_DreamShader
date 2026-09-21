@@ -1,0 +1,91 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+// Shared helpers for the three pass pixel outline chain.
+// Ported from the Unity URP ScreenPixel effect:
+//   URP学习/Assets/Rendering/ScreenPixel/ScreenPixelOutline.hlsl
+//
+// Parameters come from the nested FPixelOutlineCommonParameters block, which
+// Unreal flattens into bare names. Loose shader parameters are NOT declared by
+// Unreal -- the shader has to declare them itself, exactly like
+// Engine/Shaders/Private/PostProcessDownsample.usf does. The PO_* aliases below
+// keep the call sites readable if the binding scheme ever changes.
+
+#pragma once
+
+// Uniform 16 byte members -- the declaration here must match the CPU packing of
+// FPixelOutlineCommonParameters exactly, member for member, in order.
+float4 SourceSizeAndInvSize;
+float4 GridSizeAndBlockSize;
+float4 EdgeParams;
+float4 Weights;
+float4 OutlineColor;
+float4 DepthParams;
+float4 DebugParams;
+
+#define PO_SourceSizeAndInvSize SourceSizeAndInvSize
+#define PO_GridSize             GridSizeAndBlockSize.xy
+#define PO_BlockSize2D          GridSizeAndBlockSize.zw
+#define PO_EdgeParams           EdgeParams
+#define PO_Weights              Weights
+#define PO_OutlineColor         OutlineColor
+#define PO_DepthParams          DepthParams
+#define PO_DebugParams          DebugParams
+
+// Standard 3x3 Sobel kernel. The centre tap contributes nothing; the edge is
+// decided by the gradient across the eight neighbours.
+static const float2 kSobelOffsets[9] =
+{
+	float2(-1.0,  1.0), float2(0.0,  1.0), float2(1.0,  1.0),
+	float2(-1.0,  0.0), float2(0.0,  0.0), float2(1.0,  0.0),
+	float2(-1.0, -1.0), float2(0.0, -1.0), float2(1.0, -1.0)
+};
+
+static const float kSobelX[9] =
+{
+	-1.0, 0.0, 1.0,
+	-2.0, 0.0, 2.0,
+	-1.0, 0.0, 1.0
+};
+
+static const float kSobelY[9] =
+{
+	 1.0,  2.0,  1.0,
+	 0.0,  0.0,  0.0,
+	-1.0, -2.0, -1.0
+};
+
+// The Sobel weights sum to 4 on each side; 0.25 normalises the response into a
+// range that is comfortable to author thresholds against.
+static const float kSobelNormalization = 0.25;
+
+// Rec.709 luminance, identical to the Unity original.
+float GetLuminance709(float3 Color)
+{
+	return dot(max(Color, 0.0), float3(0.2126, 0.7152, 0.0722));
+}
+
+int2 GetSourceSizeInt()
+{
+	return max((int2)round(PO_SourceSizeAndInvSize.xy), int2(1, 1));
+}
+
+float2 GetSourceSizeFloat()
+{
+	return max(PO_SourceSizeAndInvSize.xy, float2(1.0, 1.0));
+}
+
+// Which pixel block a screen UV falls into. The result is clamped so that the
+// last, possibly partial, row/column still maps to a valid texel.
+int2 GetPixelBlockIndex(float2 UV, int2 SourceSize, int2 GridSize, int2 BlockSize)
+{
+	float2 BlockPosition = saturate(UV) * (float2)SourceSize / (float2)BlockSize;
+	return min((int2)floor(BlockPosition), GridSize - 1);
+}
+
+// Centre UV of the block's *actual* coverage, correct for a partial final block.
+float2 GetPixelBlockCenterUV(int2 BlockIndex, int2 SourceSize, int2 BlockSize)
+{
+	int2 BlockStart = BlockIndex * BlockSize;
+	int2 BlockExtent = min(BlockSize, SourceSize - BlockStart);
+	return ((float2)BlockStart + 0.5 * (float2)BlockExtent) / (float2)SourceSize;
+}
