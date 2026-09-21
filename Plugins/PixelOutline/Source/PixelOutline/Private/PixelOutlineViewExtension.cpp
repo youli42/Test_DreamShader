@@ -10,6 +10,40 @@
 #include "SceneView.h"
 #include "ScreenPass.h"
 
+// Diagnostics for the "garbage borders when resizing the viewport" issue: log
+// whenever the source (SceneColor) and output (override/backbuffer) extents
+// disagree or change between frames.
+namespace
+{
+	FIntPoint GLastSourceExtent = FIntPoint::ZeroValue;
+	FIntPoint GLastOutputExtent = FIntPoint::ZeroValue;
+	bool GbLastHadOverride = false;
+
+	void LogPassExtentsIfNeeded(const FIntPoint& SourceExtent, const FScreenPassRenderTarget& Output, bool bHadOverride)
+	{
+		const FIntPoint OutputTextureExtent = Output.IsValid() ? Output.Texture->Desc.Extent : FIntPoint::ZeroValue;
+		const FIntRect OutputRect = Output.IsValid() ? Output.ViewRect : FIntRect();
+
+		if (SourceExtent == GLastSourceExtent &&
+			OutputTextureExtent == GLastOutputExtent &&
+			bHadOverride == GbLastHadOverride)
+		{
+			return;
+		}
+
+		UE_LOG(LogTemp, Warning,
+			TEXT("PixelOutline extents: source=%dx%d outputTex=%dx%d outputRect=(%d,%d)-(%d,%d) override=%d"),
+			SourceExtent.X, SourceExtent.Y,
+			OutputTextureExtent.X, OutputTextureExtent.Y,
+			OutputRect.Min.X, OutputRect.Min.Y, OutputRect.Max.X, OutputRect.Max.Y,
+			bHadOverride ? 1 : 0);
+
+		GLastSourceExtent = SourceExtent;
+		GLastOutputExtent = OutputTextureExtent;
+		GbLastHadOverride = bHadOverride;
+	}
+}
+
 FPixelOutlineViewExtension::FPixelOutlineViewExtension(const FAutoRegister& AutoRegister)
 	: FSceneViewExtensionBase(AutoRegister)
 {
@@ -181,6 +215,8 @@ FScreenPassTexture FPixelOutlineViewExtension::AddPixelOutlinePasses(
 			PixelShader,
 			PassParameters);
 	}
+
+	LogPassExtentsIfNeeded(SourceExtent, Output, Inputs.OverrideOutput.IsValid());
 
 	return MoveTemp(Output);
 }
