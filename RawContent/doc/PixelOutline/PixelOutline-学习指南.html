@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelOutline 学习指南 · 改了什么 / 怎么学 / 关键点在哪</title>
+<style>
+:root{
+  --bg:#0e1117; --bg2:#161b22; --bg3:#1c2230; --line:#2a3240;
+  --fg:#d7dee8; --fg2:#9aa7b8; --fg3:#6b7688;
+  --accent:#6ea8fe; --ok:#7bd88f; --warn:#ffc86b; --bad:#ff7b72; --purple:#c39bff;
+  --mono:'Cascadia Code','JetBrains Mono',Consolas,'Courier New',monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;
+  line-height:1.75; font-size:15px;
+}
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:250px 1fr; gap:0; max-width:1480px; margin:0 auto}
+nav{
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+  padding:28px 16px 40px; border-right:1px solid var(--line); background:var(--bg2);
+}
+nav .brand{font-weight:700; font-size:15px; color:var(--fg); margin-bottom:4px}
+nav .brand span{display:block; font-weight:400; font-size:12px; color:var(--fg3); margin-top:2px}
+nav ol{list-style:none; padding:0; margin:18px 0 0; counter-reset:s}
+nav li{counter-increment:s}
+nav a{
+  display:block; padding:6px 10px; border-radius:6px; color:var(--fg2);
+  text-decoration:none; font-size:13.5px; border-left:2px solid transparent;
+}
+nav a::before{content:counter(s) ". "; color:var(--fg3)}
+nav a:hover{background:var(--bg3); color:var(--fg)}
+nav a.active{background:var(--bg3); color:var(--accent); border-left-color:var(--accent)}
+main{padding:32px 40px 120px; min-width:0}
+/* ---------- typography ---------- */
+h1{font-size:30px; margin:0 0 6px; letter-spacing:-.3px}
+h2{
+  font-size:22px; margin:52px 0 14px; padding-bottom:8px;
+  border-bottom:1px solid var(--line); scroll-margin-top:20px;
+}
+h2 .num{color:var(--accent); font-family:var(--mono); font-size:16px; margin-right:8px}
+h3{font-size:17px; margin:28px 0 8px; color:var(--fg)}
+h4{font-size:14.5px; margin:18px 0 6px; color:var(--fg2)}
+p{margin:10px 0}
+ul,ol{margin:10px 0; padding-left:22px}
+li{margin:5px 0}
+code{
+  font-family:var(--mono); font-size:12.8px; background:var(--bg3);
+  padding:1.5px 5px; border-radius:4px; color:#e6c07b;
+}
+pre{
+  background:var(--bg2); border:1px solid var(--line); border-radius:8px;
+  padding:14px 16px; overflow-x:auto; margin:12px 0; line-height:1.6;
+}
+pre code{background:none; padding:0; color:var(--fg); font-size:12.8px; white-space:pre}
+.sub{color:var(--fg3); font-size:13.5px}
+strong{color:#fff}
+hr{border:0; border-top:1px solid var(--line); margin:34px 0}
+/* ---------- components ---------- */
+.hero{
+  background:linear-gradient(135deg,#16233a 0%,#12161f 60%);
+  border:1px solid var(--line); border-radius:12px; padding:24px 26px; margin-bottom:8px;
+}
+.hero p{margin:8px 0 0; color:var(--fg2)}
+.tag{
+  display:inline-block; font-size:11.5px; padding:2px 8px; border-radius:20px;
+  border:1px solid var(--line); background:var(--bg3); color:var(--fg2); margin:0 6px 6px 0;
+  font-family:var(--mono);
+}
+.card{background:var(--bg2); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin:14px 0}
+.card.warn{border-left:3px solid var(--warn)}
+.card.ok{border-left:3px solid var(--ok)}
+.card.bad{border-left:3px solid var(--bad)}
+.card.key{border-left:3px solid var(--accent)}
+.cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px}
+table{border-collapse:collapse; width:100%; margin:12px 0; font-size:13.5px}
+th,td{border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top}
+th{background:var(--bg3); color:var(--fg); font-weight:600}
+tbody tr:nth-child(even){background:#12161d}
+.kbd{
+  font-family:var(--mono); font-size:12px; background:#0b0e14; border:1px solid var(--line);
+  border-bottom-width:2px; border-radius:4px; padding:1px 6px; color:var(--ok);
+}
+.tree{
+  font-family:var(--mono); font-size:12.6px; background:var(--bg2); border:1px solid var(--line);
+  border-radius:8px; padding:14px 16px; overflow-x:auto; white-space:pre; margin:12px 0; color:var(--fg2);
+}
+.tree .n{color:var(--ok)}    /* new */
+.tree .m{color:var(--warn)}  /* modified */
+.tree .c{color:var(--fg3)}   /* comment */
+/* pipeline diagram */
+.pipe{display:flex; flex-direction:column; gap:0; margin:16px 0}
+.step{
+  background:var(--bg2); border:1px solid var(--line); border-radius:10px; padding:14px 16px;
+}
+.step .head{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.step .badge{
+  font-family:var(--mono); font-size:11.5px; padding:2px 8px; border-radius:5px;
+  background:#1d3a5c; color:var(--accent); border:1px solid #2b5580;
+}
+.step h4{margin:0; color:#fff; font-size:15px}
+.step .when{font-size:12px; color:var(--fg3); font-family:var(--mono)}
+.step p{margin:8px 0 0; font-size:13.5px; color:var(--fg2)}
+.step ul{margin:8px 0 0; font-size:13.5px; color:var(--fg2)}
+.arrow{
+  text-align:center; color:var(--fg3); font-family:var(--mono); font-size:12px;
+  padding:6px 0; line-height:1.2;
+}
+.arrow .rt{
+  display:inline-block; background:var(--bg3); border:1px solid var(--line);
+  border-radius:5px; padding:2px 10px; color:var(--fg2);
+}
+/* lab */
+.lab{background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:18px; margin:16px 0}
+.ctrl{display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin-bottom:14px}
+.ctrl label{font-size:13px; color:var(--fg2); display:flex; align-items:center; gap:8px}
+.ctrl input[type=range]{width:150px; accent-color:var(--accent)}
+.ctrl output{font-family:var(--mono); color:var(--ok); min-width:52px; font-size:13px}
+.panels{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px}
+.panel{background:#0b0e14; border:1px solid var(--line); border-radius:8px; padding:10px}
+.panel canvas{width:100%; height:auto; display:block; border-radius:4px; image-rendering:pixelated; background:#000}
+.panel .cap{font-size:12.5px; color:var(--fg2); margin-top:8px}
+.panel .cap b{color:#fff; display:block; font-size:13px; margin-bottom:2px}
+.panel .stat{font-family:var(--mono); font-size:12px; color:var(--fg3); margin-top:4px}
+.panel.a{border-color:#5c3a3a}
+.panel.b{border-color:#5c523a}
+.panel.c{border-color:#2f5c45}
+.verdict{font-family:var(--mono); font-size:12.5px; margin-top:4px}
+.v-bad{color:var(--bad)} .v-mid{color:var(--warn)} .v-ok{color:var(--ok)}
+/* quiz */
+details{background:var(--bg2); border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin:8px 0}
+details summary{cursor:pointer; font-size:14px; color:var(--fg)}
+details[open] summary{color:var(--accent)}
+details .ans{padding-top:8px; border-top:1px dashed var(--line); margin-top:8px; font-size:13.5px; color:var(--fg2)}
+/* misc */
+.two{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+@media(max-width:1000px){ .two{grid-template-columns:1fr} .wrap{grid-template-columns:1fr} nav{display:none} main{padding:20px} }
+.pill{font-size:11.5px; padding:1px 7px; border-radius:4px; font-family:var(--mono)}
+.pill.must{background:#3a1d1d; color:var(--bad); border:1px solid #6b2b2b}
+.pill.semi{background:#3a3320; color:var(--warn); border:1px solid #6b5b2b}
+.pill.free{background:#1d3a2a; color:var(--ok); border:1px solid #2b6b45}
+.stage{border-left:3px solid var(--accent); padding-left:14px; margin:20px 0}
+.stage h4{margin:0 0 4px; color:#fff; font-size:15.5px}
+.stage .meta{font-size:12px; color:var(--fg3); font-family:var(--mono)}
+footer{margin-top:60px; padding-top:16px; border-top:1px solid var(--line); color:var(--fg3); font-size:12.5px}
+.note{font-size:12.5px; color:var(--fg3); margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <div class="brand">PixelOutline 学习指南
+    <span>Unity URP ScreenPixel → UE 5.8</span>
+  </div>
+  <ol>
+    <li><a href="#s1">一句话：这次做了什么</a></li>
+    <li><a href="#s2">改了什么（文件级清单）</a></li>
+    <li><a href="#s3">效果与三段式管线</a></li>
+    <li><a href="#s4">关键点 1：顺序不能反</a></li>
+    <li><a href="#s5">关键点 2~5：max / 索引 / 二值 / 采样</a></li>
+    <li><a href="#s6">UE 特有的 9 个坑</a></li>
+    <li><a href="#s7">代码导读：按什么顺序读</a></li>
+    <li><a href="#s8">学习路线（分阶段）</a></li>
+    <li><a href="#s9">动手实验清单</a></li>
+    <li><a href="#s10">自测：我懂了吗</a></li>
+    <li><a href="#s11">参数速查表</a></li>
+    <li><a href="#s12">已知问题与下一步</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============ 1 ============ -->
+<div class="hero">
+  <h1>PixelOutline：改了什么、怎么学、关键点在哪</h1>
+  <p>把 Unity URP 的 <code>ScreenPixel</code> 像素描边 Renderer Feature，移植成 UE 5.8 的一个渲染插件。
+  核心是<strong>三个全屏 Pass</strong>：全分辨率检测边缘 → 按像素块 <strong>max</strong> 归约 → 按块索引合成描边。</p>
+  <p style="margin-top:12px">
+    <span class="tag">commit 9fcb656 · 迁移实现（+19 文件）</span>
+    <span class="tag">commit 8eac364 · 文档 + 诊断日志</span>
+    <span class="tag">UE 5.8</span>
+    <span class="tag">RDG + ISceneViewExtension</span>
+  </p>
+</div>
+
+<h2 id="s1"><span class="num">01</span>一句话：这次做了什么</h2>
+
+<div class="cards">
+  <div class="card key">
+    <h4>做了</h4>
+    <ul>
+      <li>新增插件 <code>Plugins/PixelOutline</code>（RDG 三 Pass + 全局着色器 + 控制台变量）</li>
+      <li>用 <code>ISceneViewExtension</code> 挂在 <code>EPostProcessingPass::Tonemap</code>（= Unity 的 AfterRenderingPostProcessing）</li>
+      <li>逐条复刻 Unity 的 <strong>10 条算法不变量</strong>（见 §4/§5）</li>
+      <li>新增 2 个关卡 + 2 个调试材质用于验证</li>
+      <li>补了 3 份文档 + 一条视口尺寸诊断日志</li>
+    </ul>
+  </div>
+  <div class="card ok">
+    <h4>没做（重要）</h4>
+    <ul>
+      <li><strong>没有</strong>改引擎源码，纯插件</li>
+      <li><strong>没有</strong>改任何已有材质/关卡的渲染逻辑（不需要放后处理体积）</li>
+      <li>效果对<strong>任何视口</strong>生效：编辑器视口 / PIE / 独立游戏</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card warn">
+  <h4>⚠ 别混淆：工作区里还有一批「与 PixelOutline 无关」的未提交改动</h4>
+  <p><code>git status</code> 当前显示的是体积云相关的内容，跟本次移植没有关系：</p>
+  <ul>
+    <li><code>Content/Cloud/dsm/MI_VolumeCloud_RayMarching.uasset</code>（改）</li>
+    <li><code>DShader/Cloud/dsm/M_VolumeCloud_RayMarching.dsm</code>（改）</li>
+    <li><code>Plugins/DreamShader</code>（子模块指针前进）</li>
+  </ul>
+  <p class="note">PixelOutline 的工作已经提交在 9fcb656 / 8eac364 两笔里，不在未提交区。</p>
+</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="s2"><span class="num">02</span>改了什么（文件级清单）</h2>
+
+<h3>commit 9fcb656 —— 迁移实现（全部新增）</h3>
+<div class="tree"><span class="c">Plugins/PixelOutline/</span>
+├── PixelOutline.uplugin                       <span class="n">[+]</span> <span class="c">LoadingPhase = PostConfigInit（关键，见坑 1）</span>
+├── Shaders/
+│   ├── PixelOutlineCommon.ush                 <span class="n">[+]</span> <span class="c">Sobel 核 / 块索引 / 像素化 / 参数声明</span>
+│   ├── PixelOutlinePixelAndDetect.usf         <span class="n">[+]</span> <span class="c">Pass0 全分辨率：像素化 + 四路 Sobel + 二值化</span>
+│   ├── PixelOutlineReduceOutline.usf          <span class="n">[+]</span> <span class="c">Pass1 低分辨率网格：块内 max 归约</span>
+│   └── PixelOutlineComposite.usf              <span class="n">[+]</span> <span class="c">Pass2 全分辨率：块索引反查 + lerp 描边色</span>
+└── Source/PixelOutline/
+    ├── PixelOutline.Build.cs                  <span class="n">[+]</span>
+    ├── Public/
+    │   ├── PixelOutlineModule.h               <span class="n">[+]</span>
+    │   └── PixelOutlineViewExtension.h         <span class="n">[+]</span> <span class="c">视图扩展（插入点）</span>
+    └── Private/
+        ├── PixelOutlineModule.cpp             <span class="n">[+]</span> <span class="c">着色器目录映射 / 延迟创建扩展</span>
+        ├── PixelOutlineShaders.h              <span class="n">[+]</span> <span class="c">3 个全局着色器类</span>
+        ├── PixelOutlineShaders.cpp            <span class="n">[+]</span> <span class="c">IMPLEMENT_GLOBAL_SHADER + 全部 CVar + 参数打包</span>
+        ├── PixelOutlineParameters.h           <span class="n">[+]</span> <span class="c">CPU/GPU 共用参数块（全 FVector4f）</span>
+        └── PixelOutlineViewExtension.cpp      <span class="n">[+]</span> <span class="c">三 Pass 编排</span>
+
+<span class="c">Content/PixelOutline/</span>
+├── L_PixelOutline_Showcase.umap               <span class="n">[+]</span> <span class="c">展示关卡（地面+3立方体+球+圆柱，正交）</span>
+├── L_PixelOutline_Test.umap                   <span class="n">[+]</span> <span class="c">与 Unity SampleScene 同构的对比关卡</span>
+└── Debug/
+    ├── M_Debug_WorldNormal.uasset             <span class="n">[+]</span> <span class="c">验证 GBufferA 法线可读</span>
+    └── M_Debug_SceneDepth.uasset              <span class="n">[+]</span> <span class="c">验证深度可读</span>
+
+<span class="c">DShader/PixelOutline/Debug/</span>
+├── M_Debug_WorldNormal.dsm                    <span class="n">[+]</span> <span class="c">DreamShader 源文件（需落盘才可被引用）</span>
+└── M_Debug_SceneDepth.dsm                     <span class="n">[+]</span>
+</div>
+
+<h3>commit 8eac364 —— 文档 + 诊断</h3>
+<div class="tree"><span class="m">[M]</span> Plugins/PixelOutline/Source/PixelOutline/Private/PixelOutlineViewExtension.cpp
+     <span class="c">└ 新增 LogPassExtentsIfNeeded()：尺寸变化时输出 source / outputTex / outputRect / override</span>
+<span class="n">[+]</span> RawContent/doc/PixelOutline/README.md          <span class="c">60 秒上手 + 参数速查</span>
+<span class="n">[+]</span> RawContent/doc/PixelOutline/ARCHITECTURE.md    <span class="c">三 Pass 原理 + 与 Unity 逐条对照</span>
+<span class="n">[+]</span> RawContent/doc/PixelOutline/NOTES-UE58.md      <span class="c">踩坑记录 + 标定/验收流程</span>
+<span class="n">[+]</span> RawContent/doc/PixelOutline/PixelOutline-学习指南.html  <span class="c">本文件</span>
+</div>
+
+<!-- ============ 3 ============ -->
+<h2 id="s3"><span class="num">03</span>效果与三段式管线</h2>
+
+<p>最终画面 = <strong>像素块化的场景颜色</strong> + <strong>严格对齐像素块的整块描边</strong>。两个难点：</p>
+<ul>
+  <li>细轮廓不能因为没有经过块中心而丢失 → 所以检测必须在<strong>全分辨率</strong>做。</li>
+  <li>描边要占<strong>完整像素块</strong>，不能一块里只有零散几个点 → 所以归约必须用 <strong>max</strong>。</li>
+</ul>
+
+<div class="pipe">
+  <div class="step">
+    <div class="head"><span class="badge">输入</span><h4>Tonemap 之后的 SceneColor（全分辨率）</h4><span class="when">Bloom/Vignette/Tonemap 已生效</span></div>
+  </div>
+  <div class="arrow">▼<br><span class="rt">Pass0 · PixelAndDetect · PS · 全分辨率</span></div>
+  <div class="step">
+    <div class="head"><span class="badge">Pass 0</span><h4>像素化 + 四路 Sobel + 二值化</h4><span class="when">→ PackedColorAndEdge, PF_A16B16G16R16</span></div>
+    <ul>
+      <li>线性采样做像素化，<code>fwidth</code> 平滑块边界（不是硬 floor）</li>
+      <li>3×3 Sobel，<strong>一个 unroll 循环同时累积四路信号</strong>：深度 / 世界法线 / 亮度 / RGB</li>
+      <li><code>smoothstep(t, t+softness)</code> → <code>step(0.5)</code> 二值化</li>
+      <li>输出：<strong>RGB = 像素化颜色，A = 二值边缘掩码</strong></li>
+    </ul>
+  </div>
+  <div class="arrow">▼<br><span class="rt">Pass1 · ReduceOutline · PS · 画到低分辨率网格（1 像素 = 1 块）</span></div>
+  <div class="step">
+    <div class="head"><span class="badge">Pass 1</span><h4>块内 max 归约</h4><span class="when">→ OutlineGrid, ceil(W/bs) × ceil(H/bs)</span></div>
+    <ul>
+      <li>A 通道取块内 <strong>max</strong>（不是平均、不是中心采样），命中 1.0 即 <code>break</code></li>
+      <li>RGB 取块中心颜色（与描边共用同一套块网格）</li>
+    </ul>
+  </div>
+  <div class="arrow">▼<br><span class="rt">Pass2 · Composite · PS · 全分辨率</span></div>
+  <div class="step">
+    <div class="head"><span class="badge">Pass 2</span><h4>按块索引合成</h4><span class="when">→ 写回 OverrideOutput 或 SceneColor</span></div>
+    <ul>
+      <li>屏幕 UV 反算块索引 → 网格 UV = <code>(blockIndex + 0.5) / gridSize</code>，<strong>Point 采样</strong></li>
+      <li><code>lerp(块颜色, 描边色, step(0.5, mask) * alpha)</code></li>
+      <li>输出 Alpha 必须是 <strong>0</strong>（UE 语义：0 = 不透明，与 Unity 相反）</li>
+    </ul>
+  </div>
+</div>
+
+<h3>插入点怎么选的</h3>
+<table>
+  <tr><th>Unity</th><th>UE</th></tr>
+  <tr><td><code>RenderPassEvent 600</code> / <code>AfterRenderingPostProcessing</code></td><td><code>EPostProcessingPass::Tonemap</code> = <code>BL_SceneColorAfterTonemapping</code></td></tr>
+</table>
+<p>语义一致：Bloom、Vignette、Tonemapping 的结果都会一起进像素块网格。
+实现上三个 Pass 在<strong>同一个回调里顺序添加</strong>，天然满足 Pass1/2 不早于 Pass0 的依赖（等价于 Unity 里 <code>outlinePassEvent</code> 被钳制到不早于 <code>pixelPassEvent</code>）。</p>
+
+<!-- ============ 4 ============ -->
+<h2 id="s4"><span class="num">04</span>关键点 1：顺序不能反（这是整个移植的灵魂）</h2>
+
+<p>为什么必须「全分辨率检测 → 块归约 → 合成」，而不是更简单的两种做法？下面这个实验可以直接看出来。
+它用一张合成场景（大圆 + 一条<strong>亚像素级细线</strong>），对比三种策略：</p>
+
+<div class="lab">
+  <div class="ctrl">
+    <label>像素块大小 <input type="range" id="bs" min="4" max="32" value="13" step="1"><output id="bsV">13</output></label>
+    <label>边缘阈值 <input type="range" id="thr" min="0.01" max="0.60" value="0.08" step="0.01"><output id="thrV">0.08</output></label>
+    <label>细线宽度(px) <input type="range" id="lw" min="0.5" max="4" value="1.2" step="0.1"><output id="lwV">1.2</output></label>
+    <label><input type="checkbox" id="grid"> 显示块网格</label>
+  </div>
+  <div class="panels">
+    <div class="panel">
+      <canvas id="cv0" width="720" height="480"></canvas>
+      <div class="cap"><b>① 全分辨率边缘掩码</b>检测在原始分辨率上做，细线完整保留
+        <div class="stat" id="st0"></div><div class="verdict v-ok">基准真值</div></div>
+    </div>
+    <div class="panel a">
+      <canvas id="cvA" width="720" height="480"></canvas>
+      <div class="cap"><b>② A：先降采样，再检测</b>块中心采样深度 → 细线几乎从不落在块中心
+        <div class="stat" id="stA"></div><div class="verdict v-bad">✗ 细轮廓直接消失</div></div>
+    </div>
+    <div class="panel b">
+      <canvas id="cvB" width="720" height="480"></canvas>
+      <div class="cap"><b>③ B：全分辨率检测，但块中心采样</b>掩码只取块中心一个点
+        <div class="stat" id="stB"></div><div class="verdict v-mid">✗ 描边断断续续、块内不均</div></div>
+    </div>
+    <div class="panel c">
+      <canvas id="cvC" width="720" height="480"></canvas>
+      <div class="cap"><b>④ C：全分辨率检测 + 块内 max（本实现）</b>块内任一像素命中 → 整块描边
+        <div class="stat" id="stC"></div><div class="verdict v-ok">✓ 细线保住，且整块均匀</div></div>
+    </div>
+  </div>
+  <p class="note">演示为简化模型：只取深度一路信号、用中心差分近似 Sobel、<code>step</code> 代替 <code>smoothstep+step</code>；结论与真实管线一致。
+  注意看「描边块占比」：A 明显低于 C，差值就是被降采样吃掉的细轮廓。</p>
+</div>
+
+<h3>源码对照</h3>
+<pre><code>// Pass1 ReduceOutline —— 块内 max，命中即退出
+[loop] for (int y = 0; y &lt; 64; y++)
+{
+    if (y &gt;= BlockSize.y || BlockStart.y + y &gt;= SourceSize.y) break;
+    [loop] for (int x = 0; x &lt; 64; x++)
+    {
+        if (x &gt;= BlockSize.x || BlockStart.x + x &gt;= SourceSize.x) break;
+        BlockMask = max(BlockMask, SamplePackedAlpha(BlockStart + int2(x, y), SourceSize));
+        if (BlockMask &gt;= 1.0) break;      // 已经确定是描边块
+    }
+    if (BlockMask &gt;= 1.0) break;
+}</code></pre>
+
+<!-- ============ 5 ============ -->
+<h2 id="s5"><span class="num">05</span>关键点 2~5</h2>
+
+<h3>关键点 2：一切合并都用 <code>max</code>，不用求和 / 平均</h3>
+<p>四路信号（深度 / 法线 / 亮度 / RGB）合并也是 <code>max</code>：</p>
+<pre><code>float GeometryEdge   = max(SobelEdges.x * Weights.x, SobelEdges.y * Weights.y);   // 深度 / 法线
+float LuminanceEdge  = SobelEdges.z * Weights.z * step(0.5, UseLuminanceEdge);
+float AppearanceEdge = max(LuminanceEdge, SobelEdges.w * Weights.w);             // 亮度 / 颜色
+return max(GeometryEdge, AppearanceEdge);</code></pre>
+<div class="card key">
+  <strong>为什么：</strong>避免「多个低强度噪声相加被误判成真实边缘」。求和会让噪声累积越过阈值，
+  <code>max</code> 则要求<strong>某一路信号自身足够强</strong>才算边缘。这是 Unity 原实现的选择，必须复刻。
+</div>
+
+<h3>关键点 3：三个 Pass 的块索引必须完全一致</h3>
+<p>三个 Pass 共用<strong>同一套源像素尺寸</strong>（对应 Unity 的 <code>_ScreenPixelSourceSize</code>，由 Feature 显式传入而非读相机尺寸）：</p>
+<ul>
+  <li><code>SourceSizeAndInvSize</code> = <code>(W, H, 1/W, 1/H)</code> —— 全分辨率</li>
+  <li><code>GridSizeAndBlockSize.xy</code> = <code>ceil(W/bs) × ceil(H/bs)</code>，<code>.zw</code> = 块尺寸（clamp 到 [1,64]）</li>
+</ul>
+<pre><code>// 块索引（与 Unity 逐字一致）
+blockIndex  = min(floor(saturate(UV) * sourceSize / blockSize), gridSize - 1);
+
+// 块中心 UV —— 处理最后一行/列不足整块的情况
+blockStart  = blockIndex * blockSize;
+blockExtent = min(blockSize, sourceSize - blockStart);
+blockCenter = (blockStart + 0.5 * blockExtent) / sourceSize;</code></pre>
+<div class="card bad">
+  <strong>这里踩过最贵的坑：</strong>参数块里混用 <code>FIntPoint</code>(int2) 与 <code>FVector4f</code> 时，
+  CPU 打包与 HLSL cbuffer 对齐规则不一致，<code>GridSize</code>/<code>BlockSize2D</code> 在着色器里读到 <strong>0</strong>
+  → 每个块颜色都取自左上角那一个像素 → <strong>整屏一个颜色</strong>。
+  而 A 通道（掩码）不依赖这两个值，所以症状是「有边缘信号但画面纯色」，极易误判。
+  <br><br><strong>修复：</strong>公共参数块<strong>全部改成 <code>FVector4f</code></strong>（<code>GridSize</code> 与 <code>BlockSize2D</code> 合并成 <code>GridSizeAndBlockSize</code> 的 xy / zw），让 CPU 与 HLSL 按 16 字节对齐天然一致。
+</div>
+
+<h3>关键点 4：先二值化，再归约（顺序不能反）</h3>
+<pre><code>softMask = smoothstep(Threshold, Threshold + Softness, response);
+mask     = step(0.5, softMask);        // 硬二值
+// 然后才是 Pass1 的块内 max 归约</code></pre>
+<p>先软后硬，保证归约阶段只看到「整块描边 / 整块干净」，不会出现渐变黑边。
+如果把浮点响应直接拿去 max，一个块内只要有一点点响应就会被放大成整块描边。</p>
+
+<h3>关键点 5：合成必须 Point 采样 + 块中心 UV</h3>
+<pre><code>int2  BlockIndex = GetPixelBlockIndex(UV, SourceSize, GridSize, BlockSize);
+float2 GridUV    = ((float2)BlockIndex + 0.5) / (float2)GridSize;   // 命中网格 texel 中心
+float4 GridSample = GridTexture.SampleLevel(GridPointSampler, GridUV, 0);</code></pre>
+<p>这样<strong>同一块内每个屏幕像素读到完全相同的 texel</strong>，描边天生块对齐。换成 Bilinear 就会出现块与块之间的颜色渗透。</p>
+
+<h3>Sobel 细节</h3>
+<pre><code>kSobelX = {-1, 0, 1, -2, 0, 2, -1, 0, 1}      // 中心权重 0
+kSobelY = { 1, 2, 1,  0, 0, 0, -1,-2,-1}
+kSobelNormalization = 0.25;                    // 两侧权重各和为 4，归一化到便于设阈值的范围
+SampleStep = 1/SourceSize * Thickness;         // 步长以「源像素」为单位</code></pre>
+<p>一次 <code>[unroll] for (i = 0..8)</code> 内<strong>同时</strong>累积四路信号，避免四次重复采样偏移计算。</p>
+
+<!-- ============ 6 ============ -->
+<h2 id="s6"><span class="num">06</span>UE 特有的坑（9 条，按踩坑代价排序）</h2>
+
+<table>
+  <tr><th style="width:32px">#</th><th>坑</th><th>症状</th><th>结论 / 修法</th></tr>
+  <tr>
+    <td>1</td><td>模块加载时机太晚</td>
+    <td><code>Assertion failed: !AreShaderTypesInitialized()</code> → 插件加载失败</td>
+    <td><code>LoadingPhase</code> 改 <strong>PostConfigInit</strong>；视图扩展创建再延后到 <code>FCoreDelegates::OnPostEngineInit</code></td>
+  </tr>
+  <tr>
+    <td>2</td><td>参数块 int2 / float4 混用</td>
+    <td>着色器里读到 0 → 整屏单色（<span class="pill must">最贵</span>）</td>
+    <td>公共参数块<strong>全部 <code>FVector4f</code></strong></td>
+  </tr>
+  <tr>
+    <td>3</td><td>UAV 被 <code>ClearUnusedGraphResources</code> 静默清空</td>
+    <td>日志 <code>UAV=NULL</code> / <code>never written to</code> → 整屏黄色</td>
+    <td>归约<strong>改用 PS 画到低分辨率网格</strong>（也和 Unity 的 fullscreen blit 形态一致）；<code>NeverCull</code> 无效</td>
+  </tr>
+  <tr>
+    <td>4</td><td>松散参数不会自动生成 HLSL 声明</td>
+    <td><strong>编译通过但值恒为 0</strong>（不是编译错误！）</td>
+    <td>在 <code>.ush</code> 里手写全部参数变量，参照引擎自己的 <code>PostProcessDownsample.usf</code></td>
+  </tr>
+  <tr>
+    <td>5</td><td>uniform buffer 成员在 HLSL 里是「展平」名</td>
+    <td>写 <code>SceneTexturesStruct.GBufferATexture</code> 编译失败</td>
+    <td>写 <code>SceneTexturesStruct_GBufferATexture</code>；viewport 用宏 <code>SCREEN_PASS_TEXTURE_VIEWPORT(Input)</code> 后用 <code>Input_*</code></td>
+  </tr>
+  <tr>
+    <td>6</td><td>每个 <code>.usf</code> 必须 include <code>/Engine/Public/Platform.ush</code></td>
+    <td><code>Shader is required to include /Engine/Public/Platform.ush</code></td>
+    <td>每个 usf 顶部加上</td>
+  </tr>
+  <tr>
+    <td>7</td><td>Alpha 语义与 Unity 相反</td>
+    <td>画面全黑/透明</td>
+    <td>Unity 返回 <code>1.0</code>，UE 后处理必须返回 <code>0.0</code>（0 = 不透明）</td>
+  </tr>
+  <tr>
+    <td>8</td><td><code>FSceneTextures::Get(GraphBuilder)</code> 在 5.8 不存在</td>
+    <td>编译失败（全树无此符号）</td>
+    <td>用 <code>PassParameters-&gt;SceneTextures = Inputs.SceneTextures;</code></td>
+  </tr>
+  <tr>
+    <td>9</td><td>GBuffer 在 Tonemap 后是否已释放？</td>
+    <td>担心读到脏数据</td>
+    <td><strong>已核实仍有效</strong>：进后处理前以 <code>ESceneTextureSetupMode::All</code> 建立 UB 并全程传入</td>
+  </tr>
+</table>
+
+<h3>必须做的「Unity → UE 语义转换」</h3>
+<table>
+  <tr><th>项</th><th>Unity</th><th>UE</th><th>处理</th></tr>
+  <tr><td>深度</td><td><code>LinearEyeDepth(rawDepth)</code></td><td><code>CalcSceneDepth()</code> 已返回线性世界单位深度</td><td>删掉线性化那一步，<strong>保留 log2</strong></td></tr>
+  <tr><td>法线</td><td>URP 相机法线纹理</td><td>GBufferA，<code>N*0.5+0.5</code>，<strong>未归一化</strong></td><td><code>*2-1</code> 后自行 <code>normalize()</code></td></tr>
+  <tr><td>亮度</td><td><code>GetLuminance</code></td><td>无同名内置</td><td>内联 Rec.709 <code>float3(0.2126,0.7152,0.0722)</code></td></tr>
+  <tr><td>近裁剪下限</td><td><code>_ProjectionParams.y</code></td><td>无直接对应</td><td>C++ 显式传 <code>DepthParams.x</code></td></tr>
+  <tr><td>正交分支</td><td><code>LinearDepthToEyeDepth</code> vs <code>LinearEyeDepth</code></td><td><code>ConvertFromDeviceZ</code> 已统一</td><td>C++ 侧仍传 <code>bIsOrthographic</code> 备用</td></tr>
+</table>
+
+<!-- ============ 7 ============ -->
+<h2 id="s7"><span class="num">07</span>代码导读：按什么顺序读</h2>
+
+<div class="card">
+<ol>
+  <li><code>PixelOutline.uplugin</code> —— 30 秒。看 <code>LoadingPhase: PostConfigInit</code>。</li>
+  <li><code>Private/PixelOutlineModule.cpp</code> —— 两件事：
+      <code>AddShaderSourceDirectoryMapping("/Plugin/PixelOutline", ...)</code>；
+      <code>OnPostEngineInit</code> 里才 <code>NewExtension</code>。</li>
+  <li><code>Private/PixelOutlineViewExtension.cpp</code> —— <span class="pill must">最重要</span>
+      看 <code>SubscribeToPostProcessingPass</code>（过滤 Tonemap）和 <code>AddPixelOutlinePasses</code>（三 Pass 编排）。
+      重点理解：三个 <code>AddDrawScreenPass</code> 各自的输出/输入 viewport。</li>
+  <li><code>Private/PixelOutlineParameters.h</code> + <code>PixelOutlineShaders.cpp</code> ——
+      参数怎么从 CVar 打包成 7 个 <code>FVector4f</code>；为什么全是 float4。</li>
+  <li><code>Shaders/PixelOutlineCommon.ush</code> —— 参数声明（对照上一节的坑 4）+ Sobel 核 + 块索引/块中心工具函数。</li>
+  <li><code>Shaders/PixelOutlinePixelAndDetect.usf</code> —— 像素化 + 四路 Sobel + 二值化。</li>
+  <li><code>Shaders/PixelOutlineReduceOutline.usf</code> —— 块内 max。</li>
+  <li><code>Shaders/PixelOutlineComposite.usf</code> —— 块索引反查 + DebugMode 分支。</li>
+</ol>
+</div>
+
+<h3>核心 C++ 骨架（值得背下来）</h3>
+<pre><code>// 1) 订阅：只认 Tonemap
+if (Pass != EPostProcessingPass::Tonemap) return;
+if (!GetPixelOutlineSettings().bEnabled)  return;
+InOutPassCallbacks.Add(...AddPixelOutlinePasses);
+
+// 2) 取输入 + 算公共参数（三个 Pass 共用同一份！）
+const FScreenPassTextureSlice SceneColor = Inputs.GetInput(EPostProcessMaterialInput::SceneColor);
+const FPixelOutlineCommonParameters Common =
+    GetPixelOutlineCommonParameters(Settings, SourceExtent, View.NearClippingDistance, 0.0f, bIsOrtho);
+
+// 3) Pass0：全分辨率 → PackedTexture (PF_A16B16G16R16)
+//    Pass1：低分辨率 GridExtent → GridTexture（1 像素 = 1 块）
+//    Pass2：输出优先写 Inputs.OverrideOutput，否则 CreateFromInput 回写 SceneColor</code></pre>
+
+<!-- ============ 8 ============ -->
+<h2 id="s8"><span class="num">08</span>学习路线（建议 3~4 个晚上）</h2>
+
+<div class="stage">
+  <h4>阶段 0 · 跑起来，建立直觉（30 分钟）</h4>
+  <div class="meta">目标：知道「对/错」长什么样</div>
+  <ul>
+    <li>打开 <code>Content/PixelOutline/L_PixelOutline_Showcase</code>，确认看到像素化 + 白色块状描边。</li>
+    <li>控制台反复横跳 <code>r.PixelOutline.Enable 0</code> / <code>1</code>，确认开关彻底。</li>
+    <li>拖 <code>r.PixelOutline.PixelSize</code>（1→64），感受块大小与描边粗细的关系。</li>
+  </ul>
+  <p><strong>验收：</strong>能一句话说出「描边是整块的，不是细线」。</p>
+</div>
+
+<div class="stage">
+  <h4>阶段 1 · 用 DebugMode 拆开管线（1 小时）</h4>
+  <div class="meta">目标：把黑盒拆成三段，定位问题不再靠猜</div>
+  <ol>
+    <li><code>r.PixelOutline.DebugMode 2</code> —— 全分辨率掩码。全黑 → 调小 <code>EdgeThreshold</code> 或调大 <code>DepthWeight</code>；全白 → 反之。</li>
+    <li><code>r.PixelOutline.DebugMode 3</code> —— 块级掩码。确认与像素块对齐。</li>
+    <li><code>r.PixelOutline.DebugMode 1</code> —— 像素化颜色。确认像素化正常。</li>
+    <li><code>r.PixelOutline.DebugMode 0</code> —— 合成结果。</li>
+  </ol>
+  <p><strong>排查顺序固定为 2 → 3 → 0。</strong>这比任何日志都快。</p>
+</div>
+
+<div class="stage">
+  <h4>阶段 2 · 读代码（2 小时）</h4>
+  <div class="meta">目标：能在脑内跑通数据流</div>
+  <ul>
+    <li>按 §7 的顺序读一遍，边读边对照 §3 的管线图。</li>
+    <li>重点盯三处：<strong>块索引计算</strong>、<strong>块内 max 循环</strong>、<strong>Pass2 的 Point 采样</strong>。</li>
+    <li>拿张纸画出：一张 1920×1080、PixelSize=13 的画面，GridSize 是多少？最后一块的 extent 是多少？</li>
+  </ul>
+</div>
+
+<div class="stage">
+  <h4>阶段 3 · 动手改（2 小时）</h4>
+  <div class="meta">目标：从「读过」变成「能改」</div>
+  <ol>
+    <li>把描边改成红色 → 理解 <code>OutlineColor</code> 与 alpha 语义。</li>
+    <li>打开 RGB 信号：<code>r.PixelOutline.ColorWeight 1</code>，观察材质颜色边界被描出来 —— 理解第四路信号。</li>
+    <li>把 <code>kSobelNormalization</code> 改成 1.0，观察阈值需要如何跟着变 —— 理解归一化系数的意义。</li>
+    <li>把 Pass1 的 <code>max</code> 换成 <code>sum / count</code>（平均），亲眼看描边变淡变碎 —— <span class="pill must">这一步最能建立直觉</span>。</li>
+    <li>把 Pass2 的 <code>Point</code> 采样换成 Bilinear，看块边界渗色。</li>
+  </ol>
+</div>
+
+<div class="stage">
+  <h4>阶段 4 · 理解参数标定（1 小时）</h4>
+  <div class="meta">目标：知道 Unity 的数值为什么不能直接抄</div>
+  <p>原因：UE 深度已线性化、法线未归一化、AfterTonemapping 处颜色值域不同。</p>
+  <ol>
+    <li><code>r.PixelOutline.NormalWeight 0</code>（<code>ColorWeight</code>、<code>UseLuminanceEdge</code> 默认已是 0）→ 只留深度信号。</li>
+    <li><code>DebugMode 2</code> 下把深度信号调到稳定。</li>
+    <li>再加回法线：<code>r.PixelOutline.NormalWeight 1</code>，同样方式微调。</li>
+    <li><code>DebugMode 3</code> → <code>DebugMode 0</code> 收尾，按需调 <code>PixelSize</code>。</li>
+  </ol>
+  <p class="note">本机参考量级：默认权重下掩码覆盖 2.5%；<code>DepthWeight 20</code> 时 28.9%。</p>
+</div>
+
+<div class="stage">
+  <h4>阶段 5 · 进阶（可选）</h4>
+  <ul>
+    <li>时域稳定：对边缘响应做轻量 TAA 式混合，根治移动时的描边闪烁。</li>
+    <li>性能：Pass1 的双层循环最坏 64×64 次采样/块，可考虑改成 compute（但要先解决坑 3）。</li>
+    <li>形态：把描边做成可配置的内描边/外描边、按物体 ID 分色。</li>
+  </ul>
+</div>
+
+<!-- ============ 9 ============ -->
+<h2 id="s9"><span class="num">09</span>动手实验清单</h2>
+
+<table>
+  <tr><th style="width:44px">#</th><th>操作</th><th>预期看到</th><th>不懂的话回去看</th></tr>
+  <tr><td>1</td><td><code>r.PixelOutline.Enable 0</code></td><td>效果完全消失，画面恢复正常</td><td>§7 订阅逻辑</td></tr>
+  <tr><td>2</td><td><code>r.PixelOutline.PixelSize 1</code></td><td>块 = 1 像素，等于「细线描边 + 原始画面」</td><td>§5 关键点 3</td></tr>
+  <tr><td>3</td><td><code>r.PixelOutline.PixelSize 40</code></td><td>巨大色块，描边变得极粗</td><td>同上</td></tr>
+  <tr><td>4</td><td><code>r.PixelOutline.DebugMode 2</code></td><td>黑白全分辨率掩码</td><td>§8 阶段 1</td></tr>
+  <tr><td>5</td><td><code>r.PixelOutline.DebugMode 3</code></td><td>块级掩码，格子感明显</td><td>§4</td></tr>
+  <tr><td>6</td><td><code>r.PixelOutline.DepthWeight 20</code></td><td>掩码覆盖率从 ~2.5% 飙到 ~28.9%，噪声也变多</td><td>§8 阶段 4</td></tr>
+  <tr><td>7</td><td><code>r.PixelOutline.NormalWeight 0</code></td><td>同一深度平面上的转折（立方体棱）描边消失</td><td>§5 四路信号</td></tr>
+  <tr><td>8</td><td><code>r.PixelOutline.ColorWeight 1</code></td><td>材质颜色边界也被描出来</td><td>同上</td></tr>
+  <tr><td>9</td><td><code>r.PixelOutline.OutlineThickness 3</code></td><td>Sobel 采样半径变大，描边变粗但更糊</td><td>§5 Sobel 细节</td></tr>
+  <tr><td>10</td><td><code>r.PixelOutline.NormalSource 1</code></td><td>法线信号被关掉（排查用）</td><td>§6 法线转换</td></tr>
+</table>
+
+<!-- ============ 10 ============ -->
+<h2 id="s10"><span class="num">10</span>自测：我懂了吗</h2>
+<p>先自己答，再展开看答案。</p>
+
+<details>
+  <summary>Q1：为什么不能「先降采样到块分辨率，再做 Sobel」？</summary>
+  <div class="ans">细轮廓（宽度 &lt; 块尺寸）在降采样时就被丢掉了 —— 降采样只取块中心/平均，1~2 像素宽的线几乎不可能影响块中心的值。§4 的实验面板 ② 就是这个情况。</div>
+</details>
+<details>
+  <summary>Q2：为什么块内归约用 max 而不是平均？</summary>
+  <div class="ans">要让「块内只要有一个边缘像素，整块就是描边块」。平均会把一个强边缘稀释成 1/N²，导致描边块颜色深浅不一、甚至低于阈值消失。§5 关键点 2。</div>
+</details>
+<details>
+  <summary>Q3：四路信号为什么用 max 合并，而不是加权求和？</summary>
+  <div class="ans">防止多个低强度噪声相加被误判成真实边缘。max 要求某一路信号自身足够强。</div>
+</details>
+<details>
+  <summary>Q4：二值化和归约，谁先谁后？为什么？</summary>
+  <div class="ans">先二值化（smoothstep → step(0.5)），再归约。这样归约阶段只看到 0 或 1，输出必然是「整块描边 / 整块干净」，不会出现渐变黑边。</div>
+</details>
+<details>
+  <summary>Q5：1920×1080、PixelSize=13，GridSize 是多少？最后一块的 extent 是多少？</summary>
+  <div class="ans">GridSize = ceil(1920/13) × ceil(1080/13) = 148 × 84。
+  最后一块：blockStart.x = 147×13 = 1911，extent.x = min(13, 1920-1911) = <strong>9</strong>（不足整块）。
+  blockStart.y = 83×13 = 1079，extent.y = min(13, 1080-1079) = <strong>1</strong>。这正是 <code>blockExtent = min(blockSize, sourceSize - blockStart)</code> 存在的意义。</div>
+</details>
+<details>
+  <summary>Q6：UE 后处理 Pass 输出的 Alpha 应该写 0 还是 1？</summary>
+  <div class="ans">写 <strong>0</strong>。UE 后处理的 alpha 语义与 Unity 相反：0 = 不透明。Unity 原实现返回 1.0，直接照抄会出问题。</div>
+</details>
+<details>
+  <summary>Q7：着色器里读 GBufferA 的正确写法是什么？</summary>
+  <div class="ans"><code>SceneTexturesStruct_GBufferATexture.SampleLevel(SceneTexturesStruct_PointClampSampler, UV, 0).rgb * 2.0 - 1.0</code>，并且要自己 <code>normalize()</code>（UE 给的是未归一化的）。注意是<strong>下划线展平名</strong>，不是点号。</div>
+</details>
+<details>
+  <summary>Q8：加了一个新的松散 shader 参数，编译通过了但值恒为 0，最可能的原因？</summary>
+  <div class="ans">UE 不会为松散参数生成 HLSL 声明 —— 必须在 <code>.ush</code> 里自己写。参照引擎的 <code>PostProcessDownsample.usf</code>。</div>
+</details>
+
+<!-- ============ 11 ============ -->
+<h2 id="s11"><span class="num">11</span>参数速查表</h2>
+<table>
+  <tr><th>控制台变量</th><th>默认</th><th>说明</th><th>Unity 对应</th></tr>
+  <tr><td><code>r.PixelOutline.Enable</code></td><td>1</td><td>总开关</td><td><code>m_Active</code></td></tr>
+  <tr><td><code>r.PixelOutline.PixelSize</code></td><td>13</td><td>像素块边长（源像素），钳制 [1,64]</td><td><code>_PixelSize</code></td></tr>
+  <tr><td><code>r.PixelOutline.OutlineColor.R/G/B/A</code></td><td>1</td><td>描边颜色（四个变量）</td><td><code>_OutlineColor</code></td></tr>
+  <tr><td><code>r.PixelOutline.OutlineThickness</code></td><td>1.0</td><td>Sobel 采样半径倍数</td><td><code>_OutlineThickness</code></td></tr>
+  <tr><td><code>r.PixelOutline.DepthWeight</code></td><td>1.5</td><td>深度信号权重</td><td><code>_DepthWeight</code></td></tr>
+  <tr><td><code>r.PixelOutline.NormalWeight</code></td><td>1.0</td><td>世界法线信号权重</td><td><code>_NormalWeight</code></td></tr>
+  <tr><td><code>r.PixelOutline.UseLuminanceEdge</code></td><td>0</td><td>亮度边缘开关（0/1）</td><td><code>_UseLuminanceEdge</code></td></tr>
+  <tr><td><code>r.PixelOutline.LuminanceWeight</code></td><td>1.0</td><td>亮度信号权重</td><td><code>_LuminanceWeight</code></td></tr>
+  <tr><td><code>r.PixelOutline.ColorWeight</code></td><td>0.0</td><td>RGB 信号权重（0 = 关闭）</td><td><code>_ColorWeight</code></td></tr>
+  <tr><td><code>r.PixelOutline.EdgeThreshold</code></td><td>0.08</td><td>边缘响应阈值</td><td><code>_EdgeThreshold</code></td></tr>
+  <tr><td><code>r.PixelOutline.EdgeSoftness</code></td><td>0.04</td><td>阈值过渡宽度</td><td><code>_EdgeSoftness</code></td></tr>
+  <tr><td><code>r.PixelOutline.DebugMode</code></td><td>0</td><td>0 完整 / 1 像素化色 / 2 全分辨率掩码 / 3 块掩码</td><td>——</td></tr>
+  <tr><td><code>r.PixelOutline.NormalSource</code></td><td>0</td><td>0 GBufferA 法线；1 关闭法线信号</td><td>——</td></tr>
+</table>
+
+<h3>相关资产</h3>
+<table>
+  <tr><th>路径</th><th>说明</th></tr>
+  <tr><td><code>Content/PixelOutline/L_PixelOutline_Showcase</code></td><td>紧凑展示关卡</td></tr>
+  <tr><td><code>Content/PixelOutline/L_PixelOutline_Test</code></td><td>与 Unity <code>SampleScene</code> 同构的对比关卡（正交相机 = Unity orthographic size 10.6）</td></tr>
+  <tr><td><code>Content/PixelOutline/Debug/M_Debug_WorldNormal</code></td><td>直接输出 <code>SceneTexture:WorldNormal</code></td></tr>
+  <tr><td><code>Content/PixelOutline/Debug/M_Debug_SceneDepth</code></td><td>输出 <code>log2(线性深度)</code> 灰度</td></tr>
+</table>
+
+<!-- ============ 12 ============ -->
+<h2 id="s12"><span class="num">12</span>已知问题与下一步</h2>
+
+<div class="card warn">
+  <h4>问题 1 · 移动视角时描边闪烁</h4>
+  <p><strong>已排除</strong>逐帧噪声/抖动（TAA 开/关的帧间差异都是 0.00%）。闪烁只在相机移动/缩放时出现，是两层叠加：</p>
+  <ol>
+    <li><strong>算法固有放大</strong>：Sobel → 二值化 → 块归约，会把亚像素级边缘抖动放大成「整块描边开/关」。</li>
+    <li><strong>参数处在噪声带</strong>：默认 <code>DepthWeight 1.5</code> 下掩码仅覆盖 2.5%，阈值 0.08 卡在响应噪声带边缘。</li>
+  </ol>
+  <p><strong>缓解：</strong><code>DepthWeight 1.5 → 5</code>（实验 20 时掩码升到 28.9%，远离噪声带）、<code>EdgeSoftness 0.04 → 0.1+</code>。
+  <strong>根治：</strong>对边缘响应做轻量时域混合。</p>
+</div>
+
+<div class="card warn">
+  <h4>问题 2 · 拉伸视口时出现异常外围显示</h4>
+  <p><strong>已排除</strong>输入/输出尺寸错位（实测 <code>source=1096x520 outputTex=1096x520</code> 完全一致）。</p>
+  <p><strong>当前判断：</strong>视口拉伸的过渡帧中 <code>ViewRect</code> 扩大超出 RT 已渲染区域，Pass2 沿用 <code>ENoAction</code>，
+  未写入的外围区域显示上一帧残影或未初始化内容。</p>
+  <p><strong>下一步：</strong>插件已加 <code>PixelOutline extents:</code> 日志（尺寸变化时输出）。复现时把该日志发来即可判定：</p>
+  <ul>
+    <li>拉伸中 source 与 outputTex <strong>持续</strong>不一致 → 分辨率同步问题，改为中间纹理合成再 blit；</li>
+    <li>仅<strong>瞬间</strong>不一致 → resize 瞬态，按「ViewRect ≠ RT 全区时改用 <code>EClear</code>」修复。</li>
+  </ul>
+</div>
+
+<h3>验收清单</h3>
+<ul>
+  <li>☐ 工程编译通过、编辑器启动无渲染断言</li>
+  <li>☐ 展示关卡出现像素化画面 + 白色块状描边</li>
+  <li>☐ <code>DebugMode 2/3</code> 掩码与物体轮廓吻合</li>
+  <li>☐ 描边块位置、块大小、颜色与 Unity 参考截图一致</li>
+  <li>☐ <code>r.PixelOutline.Enable 0</code> 能完全关闭效果</li>
+  <li>☐ 原有关卡（<code>Content/Cloud/Map/L_Cloud_Base</code>）功能不受影响</li>
+  <li>☐ 遗留问题 1（闪烁）、问题 2（拉伸外围）按上文方案处理后复验</li>
+</ul>
+
+<h3>延伸阅读（引擎源码位置）</h3>
+<ul>
+  <li><code>Engine/Shaders/Private/PostProcessDownsample.usf</code> —— 松散参数手写声明的范例</li>
+  <li><code>Engine/Source/Runtime/Renderer/Private/SceneView.h:2180</code> —— <code>GetOverwriteLoadAction()</code></li>
+  <li><code>Engine/Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp</code> —— <code>ESceneTextureSetupMode::All</code> 建立 UB 的时机</li>
+  <li>Unity 原始实现：<code>URP学习/Assets/Rendering/ScreenPixel/ScreenPixelRenderFeature.cs</code> + <code>ScreenPixelOutline.hlsl</code>（331 行）</li>
+</ul>
+
+<footer>
+  生成自 <code>RawContent/doc/PixelOutline/</code> 下的 README.md / ARCHITECTURE.md / NOTES-UE58.md，并对照
+  <code>Plugins/PixelOutline</code> 源码与提交 9fcb656 / 8eac364 校对。<br>
+  引擎路径以本机 <code>C:/Program Files/Epic Games/UE_5.8/Engine/Source</code> 为准。
+</footer>
+
+</main>
+</div>
+
+<script>
+/* ============================================================
+   交互实验：三种降采样/归约策略对比
+   ============================================================ */
+const W = 240, H = 160, S = 3;          // 源分辨率 / 放大倍数
+const depth = new Float32Array(W * H);
+const cR = new Float32Array(W * H);
+const cG = new Float32Array(W * H);
+const cB = new Float32Array(W * H);
+const resp = new Float32Array(W * H);   // 全分辨率边缘响应
+const mask = new Uint8Array(W * H);     // 全分辨率二值掩码
+
+function buildScene(lw) {
+  // 场景：渐变背景 + 一个大圆 + 一条细对角线（亚像素级细轮廓）
+  const lx = 205, ly = -125, len2 = lx * lx + ly * ly;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      let d = 20;
+      let r = 30 + (x / W) * 45, g = 48 + (y / H) * 70, b = 92 + (1 - y / H) * 55;
+      const dx = x - 78, dy = y - 82;
+      if (dx * dx + dy * dy < 46 * 46) { d = 8; r = 214; g = 122; b = 62; }
+      const px = x - 22, py = y - 142;
+      const t = (px * lx + py * ly) / len2;
+      if (t >= 0 && t <= 1) {
+        const cx = 22 + t * lx, cy = 142 + t * ly;
+        if (Math.hypot(x - cx, y - cy) < lw * 0.5) { d = 5; r = 245; g = 245; b = 245; }
+      }
+      depth[i] = d; cR[i] = r; cG[i] = g; cB[i] = b;
+    }
+  }
+}
+
+// 用 log2(depth) 的中心差分近似 Sobel（深度一路信号）
+function buildEdge(thr) {
+  const L = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) L[i] = Math.log2(Math.max(depth[i], 1e-5));
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      const xm = Math.max(x - 1, 0), xp = Math.min(x + 1, W - 1);
+      const ym = Math.max(y - 1, 0), yp = Math.min(y + 1, H - 1);
+      const gx = L[y * W + xp] - L[y * W + xm];
+      const gy = L[yp * W + x] - L[ym * W + x];
+      const m = 0.25 * Math.hypot(gx, gy);     // kSobelNormalization = 0.25
+      resp[i] = m;
+      mask[i] = m > thr ? 1 : 0;
+    }
+  }
+}
+
+function run(bs, thr, lw, showGrid) {
+  buildScene(lw);
+  buildEdge(thr);
+  const gw = Math.ceil(W / bs), gh = Math.ceil(H / bs);
+
+  // 块中心颜色 + 块中心坐标
+  const bc = [], bIdx = [];
+  for (let by = 0; by < gh; by++) {
+    for (let bx = 0; bx < gw; bx++) {
+      const sx = bx * bs, sy = by * bs;
+      const ex = Math.min(bs, W - sx), ey = Math.min(bs, H - sy);
+      const cx = Math.min(sx + (ex >> 1), W - 1), cy = Math.min(sy + (ey >> 1), H - 1);
+      bIdx.push([sx, sy, ex, ey, cx, cy]);
+      const ci = cy * W + cx;
+      bc.push([cR[ci], cG[ci], cB[ci]]);
+    }
+  }
+
+  // 策略 A：先降采样（块中心深度）再做梯度
+  const dGrid = new Float32Array(gw * gh);
+  for (let k = 0; k < bIdx.length; k++) dGrid[k] = depth[bIdx[k][5] * W + bIdx[k][4]];
+  const LG = new Float32Array(gw * gh);
+  for (let i = 0; i < gw * gh; i++) LG[i] = Math.log2(Math.max(dGrid[i], 1e-5));
+  const maskA = new Uint8Array(gw * gh);
+  for (let gy2 = 0; gy2 < gh; gy2++) {
+    for (let gx2 = 0; gx2 < gw; gx2++) {
+      const xm = Math.max(gx2 - 1, 0), xp = Math.min(gx2 + 1, gw - 1);
+      const ym = Math.max(gy2 - 1, 0), yp = Math.min(gy2 + 1, gh - 1);
+      const gx = LG[gy2 * gw + xp] - LG[gy2 * gw + xm];
+      const gy = LG[yp * gw + gx2] - LG[ym * gw + gx2];
+      maskA[gy2 * gw + gx2] = (0.25 * Math.hypot(gx, gy)) > thr ? 1 : 0;
+    }
+  }
+
+  // 策略 B：全分辨率掩码，块中心采样
+  const maskB = new Uint8Array(gw * gh);
+  // 策略 C：全分辨率掩码，块内 max
+  const maskC = new Uint8Array(gw * gh);
+  for (let k = 0; k < bIdx.length; k++) {
+    const [sx, sy, ex, ey, cx, cy] = bIdx[k];
+    maskB[k] = mask[cy * W + cx];
+    let m = 0;
+    for (let y = 0; y < ey; y++) {
+      for (let x = 0; x < ex; x++) {
+        if (mask[(sy + y) * W + sx + x]) { m = 1; break; }
+      }
+      if (m) break;
+    }
+    maskC[k] = m;
+  }
+
+  // ---- 渲染 ----
+  drawMask('cv0', bs, showGrid);
+  drawBlocks('cvA', bs, gw, gh, bIdx, bc, maskA, showGrid);
+  drawBlocks('cvB', bs, gw, gh, bIdx, bc, maskB, showGrid);
+  drawBlocks('cvC', bs, gw, gh, bIdx, bc, maskC, showGrid);
+
+  let n = 0; for (let i = 0; i < W * H; i++) n += mask[i];
+  document.getElementById('st0').textContent = '边缘像素占比 ' + (n / (W * H) * 100).toFixed(2) + '%';
+  stat('stA', maskA); stat('stB', maskB); stat('stC', maskC);
+}
+
+function stat(id, m) {
+  let n = 0; for (let i = 0; i < m.length; i++) n += m[i];
+  document.getElementById(id).textContent = '描边块占比 ' + (n / m.length * 100).toFixed(2) + '%（共 ' + m.length + ' 块）';
+}
+
+function drawMask(id, bs, showGrid) {
+  const c = document.getElementById(id), x = c.getContext('2d');
+  const img = x.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) {
+    // 掩码为白，否则显示像素化后的暗色场景
+    const v = mask[i] ? 255 : 0;
+    const o = i * 4;
+    img.data[o] = v; img.data[o + 1] = v; img.data[o + 2] = v; img.data[o + 3] = 255;
+  }
+  const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+  x.imageSmoothingEnabled = false;
+  x.drawImage(tmp, 0, 0, W * S, H * S);
+  if (showGrid) grid(x, bs);
+}
+
+function drawBlocks(id, bs, gw, gh, bIdx, bc, m, showGrid) {
+  const c = document.getElementById(id), x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, c.width, c.height);
+  for (let k = 0; k < bIdx.length; k++) {
+    const [sx, sy, ex, ey] = bIdx[k];
+    const col = bc[k];
+    if (m[k]) { x.fillStyle = '#ffffff'; }
+    else { x.fillStyle = 'rgb(' + (col[0] | 0) + ',' + (col[1] | 0) + ',' + (col[2] | 0) + ')'; }
+    x.fillRect(sx * S, sy * S, ex * S, ey * S);
+  }
+  if (showGrid) grid(x, bs);
+}
+
+function grid(x, bs) {
+  x.strokeStyle = 'rgba(110,168,254,0.35)'; x.lineWidth = 1;
+  x.beginPath();
+  for (let px = 0; px <= W; px += bs) { x.moveTo(px * S, 0); x.lineTo(px * S, H * S); }
+  for (let py = 0; py <= H; py += bs) { x.moveTo(0, py * S); x.lineTo(W * S, py * S); }
+  x.stroke();
+}
+
+const els = ['bs', 'thr', 'lw'];
+function refresh() {
+  const bs = +document.getElementById('bs').value;
+  const thr = +document.getElementById('thr').value;
+  const lw = +document.getElementById('lw').value;
+  document.getElementById('bsV').textContent = bs;
+  document.getElementById('thrV').textContent = thr.toFixed(2);
+  document.getElementById('lwV').textContent = lw.toFixed(1);
+  document.getElementById('st0').textContent = '计算中…';
+  setTimeout(() => run(bs, thr, lw, document.getElementById('grid').checked), 0);
+}
+els.forEach(id => document.getElementById(id).addEventListener('input', refresh));
+document.getElementById('grid').addEventListener('change', refresh);
+refresh();
+
+/* ---- 目录高亮 ---- */
+const links = [...document.querySelectorAll('nav a')];
+const secs = links.map(a => document.querySelector(a.getAttribute('href')));
+function onScroll() {
+  const y = window.scrollY + 120;
+  let cur = 0;
+  secs.forEach((s, i) => { if (s && s.offsetTop <= y) cur = i; });
+  links.forEach((a, i) => a.classList.toggle('active', i === cur));
+}
+window.addEventListener('scroll', onScroll); onScroll();
+</script>
+</body>
+</html>

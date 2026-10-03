@@ -4,7 +4,7 @@
       "command": "npx",
       "args": [
         "ue-mcp",
-        "E:/E_SATA_WP/UE/Test_DreamShader/Test_DreamShader.uproject"
+        "./Test_DreamShader.uproject"
       ]
     }
   }
